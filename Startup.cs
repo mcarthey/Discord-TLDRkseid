@@ -59,10 +59,17 @@ public class Startup
 
         Client.Ready += async () =>
         {
-            ulong guildId = 657025384822341643;
-            await Interactions.RegisterCommandsToGuildAsync(guildId, true);
-            await Interactions.RegisterCommandsGloballyAsync(true); // true = overwrite all global commands
-            Console.WriteLine("✅ TLDrkseid slash commands registered to guild.");
+            var guildIdVar = Environment.GetEnvironmentVariable("DISCORD_DEV_GUILD_ID");
+            if (ulong.TryParse(guildIdVar, out var devGuildId))
+            {
+                await Interactions.RegisterCommandsToGuildAsync(devGuildId, true);
+                Console.WriteLine($"✅ TLDrkseid slash commands registered to dev guild: {devGuildId}");
+            }
+            else
+            {
+                await Interactions.RegisterCommandsGloballyAsync(true);
+                Console.WriteLine("✅ TLDrkseid slash commands registered globally.");
+            }
         };
     }
 
