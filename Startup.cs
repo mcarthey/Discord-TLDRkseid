@@ -39,6 +39,7 @@ public class Startup
             .AddSingleton<SummaryCacheService>()
             .AddSingleton(Client)
             .AddSingleton(Interactions)
+            .AddSingleton<SuperuserService>()
             .BuildServiceProvider();
 
         await Interactions.AddModulesAsync(typeof(Startup).Assembly, _services);
