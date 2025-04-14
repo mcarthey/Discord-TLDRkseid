@@ -2,7 +2,10 @@
 using Discord.Interactions;
 using Discord.WebSocket;
 using DiscordPA.Commands;
+using DiscordPA.Data;
+using DiscordPA.Handlers;
 using DiscordPA.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DiscordPA;
@@ -17,6 +20,9 @@ public class Startup
 
     public async Task InitializeAsync()
     {
+        var db = new TldrDbContext();
+        db.Database.Migrate();
+
         Client = new DiscordSocketClient(new DiscordSocketConfig
         {
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
@@ -32,6 +38,8 @@ public class Startup
         var aiSummarizer = new AiSummarizerService(openAiKey, costTracker);
 
         _services = new ServiceCollection()
+            .AddSingleton(db)
+            .AddSingleton<GuildAccessService>()
             .AddSingleton(Collector)
             .AddSingleton(Logger)
             .AddSingleton(costTracker)
@@ -40,6 +48,7 @@ public class Startup
             .AddSingleton(Client)
             .AddSingleton(Interactions)
             .AddSingleton<SuperuserService>()
+            .AddSingleton<MessageCommandHandler>()
             .BuildServiceProvider();
 
         await Interactions.AddModulesAsync(typeof(Startup).Assembly, _services);
@@ -60,11 +69,12 @@ public class Startup
 
         Client.Ready += async () =>
         {
-            var guildIdVar = Environment.GetEnvironmentVariable("DISCORD_DEV_GUILD_ID");
-            if (ulong.TryParse(guildIdVar, out var devGuildId))
+            var devGuildId = Environment.GetEnvironmentVariable("DISCORD_DEV_GUILD_ID");
+
+            if (ulong.TryParse(devGuildId, out var guildId))
             {
-                await Interactions.RegisterCommandsToGuildAsync(devGuildId, true);
-                Console.WriteLine($"✅ TLDrkseid slash commands registered to dev guild: {devGuildId}");
+                await Interactions.RegisterCommandsToGuildAsync(guildId, true);
+                Console.WriteLine($"✅ TLDrkseid slash commands registered to dev guild: {guildId}");
             }
             else
             {
@@ -72,6 +82,7 @@ public class Startup
                 Console.WriteLine("✅ TLDrkseid slash commands registered globally.");
             }
         };
+
     }
 
     public async Task StartAsync(string token)
@@ -95,16 +106,21 @@ public class Startup
         return TimeSpan.FromSeconds(delay.TotalSeconds % interval.TotalSeconds);
     }
 
-    private Task MessageReceived(SocketMessage message)
+    private async Task MessageReceived(SocketMessage message)
     {
-        if (!message.Author.IsBot && message.Channel is SocketTextChannel)
-            Collector.Track(message);
-        return Task.CompletedTask;
+        if (message.Author.IsBot || message.Channel is not SocketTextChannel) return;
+
+        Collector.Track(message);
+
+        var handler = _services.GetRequiredService<MessageCommandHandler>();
+        await handler.HandleAsync(message);
     }
+
 
     private Task Log(LogMessage msg)
     {
         Console.WriteLine(msg.ToString());
         return Task.CompletedTask;
     }
+
 }
