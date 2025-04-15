@@ -48,6 +48,8 @@ public class SummaryCacheService
             return true;
         }
 
+        Console.WriteLine($"[Cache] Comparing stored hash: {cached?.MessageHash} with input: {hash}");
+
         // Trickledown from deeper cached tiers
         foreach (var tier in DepthOrder.Where(t => DepthOrder[t.Key] > DepthOrder[depth]).OrderBy(t => t.Value))
         {
@@ -67,6 +69,8 @@ public class SummaryCacheService
     {
         var hash = HashMessages(messages);
         var key = BuildKey(channelId, depth, userId);
+
+        Console.WriteLine($"[Cache] Built hash: {hash} for key: {key}");
 
         _cache[key] = new CachedSummary
         {

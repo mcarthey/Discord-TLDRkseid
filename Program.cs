@@ -1,4 +1,5 @@
 ﻿using DotNetEnv;
+using System.Runtime.Loader;
 
 namespace DiscordPA;
 
@@ -19,6 +20,22 @@ class Program
         }
 
         await startup.StartAsync(token);
-        await Task.Delay(-1);
+
+        // Handle shutdown signals
+        var waitForStop = new TaskCompletionSource<bool>();
+
+        AssemblyLoadContext.Default.Unloading += _ =>
+        {
+            waitForStop.SetResult(true);
+        };
+
+        Console.CancelKeyPress += (sender, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            waitForStop.SetResult(true);
+        };
+
+        await waitForStop.Task;
+        await startup.StopAsync();
     }
 }

@@ -29,6 +29,21 @@ public class MessageCommandHandler
         if (rawMessage is not SocketUserMessage message) return;
         if (message.Author.IsBot || message.Channel is not SocketTextChannel channel) return;
 
+        // 🚫 Check if bot has permission to send messages in this channel
+        var botUser = channel.Guild.GetUser(_client.CurrentUser.Id);
+        if (botUser == null)
+        {
+            Console.WriteLine("⚠️ Could not retrieve bot user in this guild.");
+            return;
+        }
+
+        var permissions = botUser.GetPermissions(channel);
+        if (!permissions.SendMessages)
+        {
+            Console.WriteLine($"❌ Bot lacks SendMessages in #{channel.Name}");
+            return;
+        }
+
         var content = message.Content.Trim();
         if (!content.StartsWith("!admin", StringComparison.OrdinalIgnoreCase)) return;
 
@@ -52,6 +67,7 @@ public class MessageCommandHandler
             return;
         }
 
+        Console.WriteLine($"Message {message.Id} sent at {message.Timestamp}");
         var command = args[1].ToLowerInvariant();
 
         switch (command)
@@ -129,6 +145,8 @@ public class MessageCommandHandler
                 break;
 
             case "whoami":
+                Console.WriteLine("Processing whoami command");
+
                 if (await _access.IsSuperuserAsync(guildId, userId))
                     await EphemeralReply("👑 You are the **superuser**.");
                 else if (await _access.IsAdminAsync(guildId, userId))
@@ -144,9 +162,28 @@ public class MessageCommandHandler
                     return;
                 }
 
+                var app = await _client.GetApplicationInfoAsync();
+
+                // Delete GUILD commands
+                var guildCommands = await _client.Rest.GetGuildApplicationCommands(guildId);
+                foreach (var cmd in guildCommands)
+                {
+                    await cmd.DeleteAsync();
+                    Console.WriteLine($"🧼 Deleted GUILD command `{cmd.Name}` ({cmd.Id}) from guild {guildId}");
+                }
+
+                // Delete GLOBAL commands
+                var globalCommands = await _client.Rest.GetGlobalApplicationCommands();
+                foreach (var cmd in globalCommands)
+                {
+                    await cmd.DeleteAsync();
+                    Console.WriteLine($"🧼 Deleted GLOBAL command `{cmd.Name}` ({cmd.Id})");
+                }
+
                 await _interactions.RegisterCommandsToGuildAsync(guildId, true);
-                await EphemeralReply("✅ Slash commands refreshed for this server.");
+                await EphemeralReply("✅ All slash commands (guild + global) cleaned and refreshed for this server.");
                 break;
+
 
             default:
                 await EphemeralReply("❓ Unknown subcommand. Try `add`, `remove`, `list`, `whoami`, `refresh`, or `add-superuser`.");

@@ -17,6 +17,7 @@ public class Startup
     public MessageCollectorService Collector { get; private set; } = default!;
     public SummaryLogger Logger { get; private set; } = default!;
     private IServiceProvider _services = default!;
+    private bool _eventsRegistered = false;
 
     public async Task InitializeAsync()
     {
@@ -49,40 +50,42 @@ public class Startup
             .AddSingleton(Interactions)
             .AddSingleton<SuperuserService>()
             .AddSingleton<MessageCommandHandler>()
+            .AddSingleton<SpamBlockerService>()
             .BuildServiceProvider();
 
         await Interactions.AddModulesAsync(typeof(Startup).Assembly, _services);
 
-        Client.Log += Log;
-        Client.MessageReceived += MessageReceived;
-
-        Client.InteractionCreated += async interaction =>
+        if (!_eventsRegistered)
         {
-            var ctx = new SocketInteractionContext(Client, interaction);
-            var result = await Interactions.ExecuteCommandAsync(ctx, _services);
+            Client.Log += Log;
+            Client.MessageReceived += MessageReceived;
 
-            if (!result.IsSuccess)
+            Client.InteractionCreated += async interaction =>
             {
-                Console.WriteLine($"[TLDrkseid] Command failed: {result.Error} - {result.ErrorReason}");
-            }
-        };
+                var ctx = new SocketInteractionContext(Client, interaction);
+                var result = await Interactions.ExecuteCommandAsync(ctx, _services);
+                if (!result.IsSuccess)
+                {
+                    Console.WriteLine($"[TLDrkseid] Command failed: {result.Error} - {result.ErrorReason}");
+                }
+            };
 
-        Client.Ready += async () =>
-        {
-            var devGuildId = Environment.GetEnvironmentVariable("DISCORD_DEV_GUILD_ID");
-
-            if (ulong.TryParse(devGuildId, out var guildId))
+            Client.Ready += async () =>
             {
-                await Interactions.RegisterCommandsToGuildAsync(guildId, true);
-                Console.WriteLine($"✅ TLDrkseid slash commands registered to dev guild: {guildId}");
-            }
-            else
-            {
-                await Interactions.RegisterCommandsGloballyAsync(true);
-                Console.WriteLine("✅ TLDrkseid slash commands registered globally.");
-            }
-        };
-
+                var devGuildId = Environment.GetEnvironmentVariable("DISCORD_DEV_GUILD_ID");
+                if (ulong.TryParse(devGuildId, out var guildId))
+                {
+                    await Interactions.RegisterCommandsToGuildAsync(guildId, true);
+                    Console.WriteLine($"✅ TLDrkseid slash commands registered to dev guild: {guildId}");
+                }
+                else
+                {
+                    await Interactions.RegisterCommandsGloballyAsync(true);
+                    Console.WriteLine("✅ TLDrkseid slash commands registered globally.");
+                }
+            };
+            _eventsRegistered = true;
+        }
     }
 
     public async Task StartAsync(string token)
@@ -90,6 +93,24 @@ public class Startup
         await Client.LoginAsync(TokenType.Bot, token);
         await Client.StartAsync();
         StartTimers();
+    }
+
+    public async Task StopAsync()
+    {
+        // Unsubscribe events
+        Client.Log -= Log;
+        Client.MessageReceived -= MessageReceived;
+        // Stop and cleanup the Discord client
+        if (Client != null)
+        {
+            await Client.StopAsync();
+            await Client.LogoutAsync();
+            Client.Dispose();
+        }
+        if (_services is IDisposable disposableServices)
+        {
+            disposableServices.Dispose();
+        }
     }
 
     private void StartTimers()
@@ -111,16 +132,13 @@ public class Startup
         if (message.Author.IsBot || message.Channel is not SocketTextChannel) return;
 
         Collector.Track(message);
-
         var handler = _services.GetRequiredService<MessageCommandHandler>();
         await handler.HandleAsync(message);
     }
-
 
     private Task Log(LogMessage msg)
     {
         Console.WriteLine(msg.ToString());
         return Task.CompletedTask;
     }
-
 }

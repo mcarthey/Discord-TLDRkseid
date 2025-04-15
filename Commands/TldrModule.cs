@@ -10,13 +10,8 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
     private readonly AiSummarizerService _summarizer;
     private readonly SummaryCacheService _cache;
     private readonly CostTrackerService _costTracker;
-
-    public TldrModule(AiSummarizerService summarizer, SummaryCacheService cache, CostTrackerService costTracker)
-    {
-        _summarizer = summarizer;
-        _cache = cache;
-        _costTracker = costTracker;
-    }
+    private readonly SpamBlockerService _spamBlocker;
+    private readonly GuildAccessService _access;
 
     private static readonly Dictionary<string, int> DepthMap = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -27,10 +22,24 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         { "max", 500 }
     };
 
+    public TldrModule(
+        AiSummarizerService summarizer,
+        SummaryCacheService cache,
+        CostTrackerService costTracker,
+        GuildAccessService access,
+        SpamBlockerService spamBlocker)
+    {
+        _summarizer = summarizer;
+        _cache = cache;
+        _costTracker = costTracker;
+        _access = access;
+        _spamBlocker = spamBlocker;
+    }
+
     [SlashCommand("tldr", "Summarize recent messages by depth")]
     public async Task TldrAsync(
-        [Summary(description: "Summary depth: recent, brief, standard, deep, or max")] string depth,
-        [Summary(description: "Optional user to filter")] IUser? user = null)
+       [Summary(description: "Summary depth: recent, brief, standard, deep, or max")] string depth,
+       [Summary(description: "Optional user to filter")] IUser? user = null)
     {
         if (!DepthMap.TryGetValue(depth, out var messageLimit))
         {
@@ -41,6 +50,20 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         if (Context.Channel is not SocketTextChannel textChannel)
         {
             await RespondAsync("❌ This command only works in text channels.", ephemeral: true);
+            return;
+        }
+
+        var botUser = textChannel.Guild.GetUser(Context.Client.CurrentUser.Id);
+        if (botUser == null)
+        {
+            await RespondAsync("⚠️ Could not verify bot permissions in this channel.", ephemeral: true);
+            return;
+        }
+
+        var permissions = botUser.GetPermissions(textChannel);
+        if (!permissions.SendMessages || !permissions.ViewChannel)
+        {
+            await RespondAsync("🚫 I don’t have permission to post summaries in this channel.", ephemeral: true);
             return;
         }
 
@@ -78,22 +101,45 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
 
         string summary;
         double cost = 0;
-        var channelId = Context.Channel.Id.ToString();
-        var userId = user?.Id.ToString();
+        var channelIdStr = Context.Channel.Id.ToString();
+        string? userIdStr = user == null ? null : user.Id.ToString();
 
-        if (_cache.TryGet(channelId, depth, userId, filtered, out summary, out cost))
+        Console.WriteLine($"[TLDrkseid] Command: /tldr depth:{depth} user:{user?.Username ?? "none"} | InvokedBy:{Context.User.Username}#{Context.User.Discriminator} ({Context.User.Id}) | Guild:{Context.Guild?.Name ?? "DM"} Channel:{Context.Channel.Name} ({channelIdStr})");
+
+        if (_cache.TryGet(channelIdStr, depth, userIdStr, filtered, out summary, out cost))
         {
-            Console.WriteLine($"[TLDrkseid] Cache HIT for {depth} in {channelId}");
+            var guildIdStr = Context.Guild?.Id.ToString() ?? "dm";
+            var userIdStrActual = Context.User.Id.ToString();
+
+            if (_spamBlocker.IsCachedSpamming(guildIdStr, channelIdStr, userIdStrActual, out var reason))
+            {
+                await FollowupAsync(reason, ephemeral: true);
+                return;
+            }
+
+            Console.WriteLine($"[TLDrkseid] Cache HIT for /tldr {depth} in channel {channelIdStr}");
         }
         else
         {
-            Console.WriteLine($"[TLDrkseid] Cache MISS for {depth} in {channelId}");
+            var guildIdStr = Context.Guild?.Id.ToString() ?? "dm";
+            var requestingUserId = Context.User.Id;
+            var isAdmin = await _access.CanAccessAdminFeaturesAsync(Context.Guild?.Id ?? 0, requestingUserId);
+
+            if (_spamBlocker.IsSpamming(guildIdStr, channelIdStr, requestingUserId.ToString(), isAdmin, wasCached: false, out var reason))
+            {
+                await FollowupAsync(reason, ephemeral: true);
+                return;
+            }
+
+            Console.WriteLine($"[TLDrkseid] Cache MISS for /tldr {depth} in channel {channelIdStr}");
+
             try
             {
                 (string generatedSummary, double generatedCost) = await _summarizer.SummarizeAsync(filtered);
                 summary = generatedSummary;
                 cost = generatedCost;
-                _cache.Set(channelId, depth, userId, filtered, summary, cost);
+
+                _cache.Set(channelIdStr, depth, userIdStr, filtered, summary, cost);
             }
             catch (Exception ex)
             {
@@ -104,8 +150,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         }
 
         var footerText = $"{(user != null ? $"Filtered by: {user.Username}" : "All users")} • " +
-            $"This summary cost: ${cost:F4} • Total spent illuminating darkness: ${_costTracker.GetTotal():F2} • ☕";
-
+                         $"This summary cost: ${cost:F4} • Total spent illuminating darkness: ${_costTracker.GetTotal():F2} • ☕";
 
         var embed = new EmbedBuilder()
             .WithTitle($"TL;DRkseid Summary – {depth.ToUpper()}")
