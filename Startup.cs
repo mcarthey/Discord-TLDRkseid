@@ -7,6 +7,8 @@ using DiscordPA.Handlers;
 using DiscordPA.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using NLog.Extensions.Logging; // Add logging namespace
 
 namespace DiscordPA;
 
@@ -39,6 +41,10 @@ public class Startup
         var aiSummarizer = new AiSummarizerService(openAiKey, costTracker);
 
         _services = new ServiceCollection()
+            .AddLogging(config => {
+                config.ClearProviders();
+                config.AddNLog(); // Assumes NLog.Extensions.Logging is installed
+            })
             .AddSingleton(db)
             .AddSingleton<GuildAccessService>()
             .AddSingleton(Collector)
@@ -66,7 +72,8 @@ public class Startup
                 var result = await Interactions.ExecuteCommandAsync(ctx, _services);
                 if (!result.IsSuccess)
                 {
-                    Console.WriteLine($"[TLDrkseid] Command failed: {result.Error} - {result.ErrorReason}");
+                    var logger = _services.GetRequiredService<ILogger<Startup>>();
+                    logger.LogError("[TLDrkseid] Command failed: {Error} - {ErrorReason}", result.Error, result.ErrorReason);
                 }
             };
 
@@ -76,14 +83,17 @@ public class Startup
                 if (ulong.TryParse(devGuildId, out var guildId))
                 {
                     await Interactions.RegisterCommandsToGuildAsync(guildId, true);
-                    Console.WriteLine($"✅ TLDrkseid slash commands registered to dev guild: {guildId}");
+                    var logger = _services.GetRequiredService<ILogger<Startup>>();
+                    logger.LogInformation("✅ TLDrkseid slash commands registered to dev guild: {GuildId}", guildId);
                 }
                 else
                 {
                     await Interactions.RegisterCommandsGloballyAsync(true);
-                    Console.WriteLine("✅ TLDrkseid slash commands registered globally.");
+                    var logger = _services.GetRequiredService<ILogger<Startup>>();
+                    logger.LogInformation("✅ TLDrkseid slash commands registered globally.");
                 }
             };
+
             _eventsRegistered = true;
         }
     }

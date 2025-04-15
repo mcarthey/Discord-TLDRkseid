@@ -2,6 +2,7 @@
 using Discord.Interactions;
 using Discord.WebSocket;
 using DiscordPA.Services;
+using Microsoft.Extensions.Logging; // Added for ILogger
 
 namespace DiscordPA.Commands;
 
@@ -12,6 +13,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
     private readonly CostTrackerService _costTracker;
     private readonly SpamBlockerService _spamBlocker;
     private readonly GuildAccessService _access;
+    private readonly ILogger<TldrModule> _logger; // Injected logger
 
     private static readonly Dictionary<string, int> DepthMap = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -27,13 +29,15 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         SummaryCacheService cache,
         CostTrackerService costTracker,
         GuildAccessService access,
-        SpamBlockerService spamBlocker)
+        SpamBlockerService spamBlocker,
+        ILogger<TldrModule> logger) // Added logger injection
     {
         _summarizer = summarizer;
         _cache = cache;
         _costTracker = costTracker;
         _access = access;
         _spamBlocker = spamBlocker;
+        _logger = logger;
     }
 
     [SlashCommand("tldr", "Summarize recent messages by depth")]
@@ -104,34 +108,30 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         var channelIdStr = Context.Channel.Id.ToString();
         string? userIdStr = user == null ? null : user.Id.ToString();
 
-        Console.WriteLine($"[TLDrkseid] Command: /tldr depth:{depth} user:{user?.Username ?? "none"} | InvokedBy:{Context.User.Username}#{Context.User.Discriminator} ({Context.User.Id}) | Guild:{Context.Guild?.Name ?? "DM"} Channel:{Context.Channel.Name} ({channelIdStr})");
+        _logger.LogInformation("[TLDrkseid] Command: /tldr depth:{Depth} user:{User} | InvokedBy:{Invoker} ({InvokerId}) | Guild:{Guild} Channel:{Channel} ({ChannelId})",
+            depth, user?.Username ?? "none", Context.User.Username, Context.User.Id, Context.Guild?.Name ?? "DM", Context.Channel.Name, channelIdStr);
 
         if (_cache.TryGet(channelIdStr, depth, userIdStr, filtered, out summary, out cost))
         {
-            var guildIdStr = Context.Guild?.Id.ToString() ?? "dm";
-            var userIdStrActual = Context.User.Id.ToString();
-
-            if (_spamBlocker.IsCachedSpamming(guildIdStr, channelIdStr, userIdStrActual, out var reason))
+            if (_spamBlocker.IsCachedSpamming(Context.Guild?.Id.ToString() ?? "dm", channelIdStr, Context.User.Id.ToString(), out var reason))
             {
                 await FollowupAsync(reason, ephemeral: true);
                 return;
             }
-
-            Console.WriteLine($"[TLDrkseid] Cache HIT for /tldr {depth} in channel {channelIdStr}");
+            _logger.LogInformation("[TLDrkseid] Cache HIT for /tldr {Depth} in channel {ChannelId}", depth, channelIdStr);
         }
         else
         {
-            var guildIdStr = Context.Guild?.Id.ToString() ?? "dm";
             var requestingUserId = Context.User.Id;
             var isAdmin = await _access.CanAccessAdminFeaturesAsync(Context.Guild?.Id ?? 0, requestingUserId);
 
-            if (_spamBlocker.IsSpamming(guildIdStr, channelIdStr, requestingUserId.ToString(), isAdmin, wasCached: false, out var reason))
+            if (_spamBlocker.IsSpamming(Context.Guild?.Id.ToString() ?? "dm", channelIdStr, requestingUserId.ToString(), isAdmin, wasCached: false, out var reason))
             {
                 await FollowupAsync(reason, ephemeral: true);
                 return;
             }
 
-            Console.WriteLine($"[TLDrkseid] Cache MISS for /tldr {depth} in channel {channelIdStr}");
+            _logger.LogInformation("[TLDrkseid] Cache MISS for /tldr {Depth} in channel {ChannelId}", depth, channelIdStr);
 
             try
             {
@@ -143,7 +143,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[TLDrkseid AI Error] {ex.Message}");
+                _logger.LogError(ex, "[TLDrkseid AI Error]");
                 await FollowupAsync("🤖 AI summarization failed. Try again later.", ephemeral: true);
                 return;
             }

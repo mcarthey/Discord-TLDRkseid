@@ -3,6 +3,7 @@ using System;
 using DiscordPA.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DiscordPA.Migrations
 {
     [DbContext(typeof(TldrDbContext))]
-    partial class TldrDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250415150138_AddLogEntriesTable")]
+    partial class AddLogEntriesTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
