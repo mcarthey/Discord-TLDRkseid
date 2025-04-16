@@ -8,6 +8,7 @@ using DiscordPA.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NLog;
 using NLog.Extensions.Logging; // Add logging namespace
 
 namespace DiscordPA;
@@ -23,6 +24,8 @@ public class Startup
 
     public async Task InitializeAsync()
     {
+        NLog.LogManager.Setup().LoadConfigurationFromFile("NLog.config");
+
         var db = new TldrDbContext();
         db.Database.Migrate();
 
