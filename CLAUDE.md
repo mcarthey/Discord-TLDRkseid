@@ -57,3 +57,23 @@ Uses SQLite via Entity Framework Core. Database file: `tldr.sqlite`
 - Follow existing patterns for slash commands in `TldrModule.cs`
 - Use NLog for logging with guild/channel/user context
 - Handle Discord interactions with deferred responses for long operations
+
+## Bash Command Guidelines
+
+- **Do not use `cd` prefix** - The working directory is already the project root
+- **Do not chain commands with `&&`** - This interferes with permission approvals and requires continual re-approval. Run commands separately instead.
+- **Do not use `git -C`** - Permission approvals don't work well with this flag
+
+```bash
+# WRONG - don't do this
+cd "E:\Documents\dev\Discord-TLDRkseid" && git status
+
+# WRONG - don't chain with &&
+git add . && git commit -m "message" && git push
+
+# CORRECT - run commands separately
+git status
+git add .
+git commit -m "message"
+git push
+```
