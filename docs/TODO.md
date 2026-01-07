@@ -56,7 +56,7 @@ Project roadmap and pending tasks.
 ### Performance Optimizations
 - [ ] Check cache BEFORE fetching messages (current order is inefficient)
 - [ ] Add exponential backoff for API retries
-- [ ] Implement proper atomic file writes for cost tracking
+- [x] ~~Implement proper atomic file writes for cost tracking~~ - Moved to database
 
 ### Admin Features
 - [ ] Web dashboard for guild settings
@@ -188,6 +188,57 @@ Project roadmap and pending tasks.
 
 ---
 
+## Additional Considerations & Future Features
+
+### Deployment Strategy
+- [ ] **Start with Railway.app** - Free tier ($5/month credits) for initial deployment
+- [ ] **Plan Azure migration path** - Consider migrating later for work-related learning opportunities
+- [ ] **Document migration process** - Keep notes on Railway setup for easier Azure transition
+- [ ] **Test Docker build locally** - Ensures smooth deployment to any platform
+
+### Rate Limiting & Performance
+- [ ] **Verify bot-level rate limiting** - Confirm per-user/per-server limits are working
+- [ ] **Test cache effectiveness** - Monitor cache hit rates in production
+- [ ] **Implement request queuing** - Queue OpenAI requests to handle concurrent load gracefully
+- [ ] **Add circuit breaker pattern** - Fail gracefully when OpenAI API is unavailable
+
+### Monetization & Growth
+- [ ] **Define free tier limits** - Decide on summaries per day/week for free usage
+- [ ] **Design premium tier features** - Custom summary styles, priority processing, higher limits
+- [ ] **Set premium pricing** - $5/month per server is standard baseline
+- [ ] **Create upgrade flow** - In-bot messaging when users hit free tier limits
+- [ ] **Track usage metrics** - Monitor which servers are heavy users (potential premium candidates)
+
+### Branding & Discovery
+- [ ] **Clarify bot description** - Use "TLDRkseid - Summarization Bot" in listings
+- [ ] **Create bot avatar/logo** - Visual identity for bot listings
+- [ ] **Write compelling bot description** - Focus on "never miss important Discord conversations"
+- [ ] **Prepare example screenshots** - Show before/after of long threads being summarized
+- [ ] **Create demo video** (optional) - Short video showing bot in action
+
+### Scaling Preparation
+- [ ] **Monitor OpenAI rate limits** - Track requests per minute in logs
+- [ ] **Plan for multiple API keys** - Strategy for rotating keys if hitting rate limits
+- [ ] **Document scale-up process** - Steps to take if bot goes viral
+- [ ] **Set up cost alerts** - OpenAI spending alerts at $10, $50, $100 thresholds
+- [ ] **Create rollback plan** - Quick way to disable bot if costs spiral
+
+### User Experience
+- [ ] **Add helpful error messages** - Clear guidance when rate limits hit or API fails
+- [ ] **Create getting started guide** - Pin message in support server explaining commands
+- [ ] **Add feedback collection** - Command or form for users to report issues/suggestions
+- [ ] **Implement /tldr-stats command** - Show users their usage stats and tier limits
+
+### Long-term Features (Post-Launch)
+- [ ] **Custom summary templates** - Let premium users customize output format
+- [ ] **Scheduled summaries** - Daily digest of channel activity
+- [ ] **Multi-language support** - Summarize in user's preferred language
+- [ ] **Thread auto-summarization** - Automatically summarize closed threads
+- [ ] **Integration with other bots** - Partner with moderation bots for enhanced features
+- [ ] **Self-hosted Ollama option** - For privacy-focused communities willing to host their own
+
+---
+
 ## Completed
 
 ### Critical Bug Fixes (January 2026)
@@ -243,6 +294,14 @@ Project roadmap and pending tasks.
 - [x] Rate limit database write operations - SpamBlockerService now includes per-guild DB write limiting
 - [x] Fix NLog config path for Linux/Docker - Changed from hardcoded `c:\temp` to `${basedir}/logs/`
 
+### Configuration & Architecture (January 2026)
+- [x] Upgrade to .NET 10 - Updated target framework and all Microsoft packages
+- [x] Add appsettings.json - Centralized non-secret configuration (rate limits, timeouts, cache settings)
+- [x] Add strongly-typed configuration classes - `OpenAISettings`, `CacheSettings`, `RateLimitsSettings`, etc.
+- [x] Migrate cost tracking to database - `CostEntry` table with per-guild, per-day tracking
+- [x] Remove total_cost.json dependency - All cost data now in SQLite database
+- [x] Add per-guild usage statistics - `GetGuildStatsAsync()`, `GetGlobalStatsAsync()` methods
+
 ---
 
 ## Issue Summary
@@ -256,7 +315,7 @@ Project roadmap and pending tasks.
 | Security | 0 | ~~High~~ ✅ |
 | **Deployment** | **~40** | **High - Before Launch** |
 | Feature Enhancements | 5 | Medium |
-| Performance | 3 | Medium |
+| Performance | 2 | Medium |
 | Admin Features | 4 | Medium |
 | Observability | 4 | Medium |
 | Competitive Features | 6 | Low |

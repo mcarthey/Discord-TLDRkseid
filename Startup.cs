@@ -1,15 +1,17 @@
-﻿using Discord;
+using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
 using DiscordPA.Commands;
+using DiscordPA.Configuration;
 using DiscordPA.Data;
 using DiscordPA.Handlers;
 using DiscordPA.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NLog;
-using NLog.Extensions.Logging; // Add logging namespace
+using NLog.Extensions.Logging;
 
 namespace DiscordPA;
 
@@ -30,6 +32,14 @@ public class Startup
         // Load NLog config from application base directory (works for both Windows and Linux/Docker)
         var nlogConfigPath = Path.Combine(AppContext.BaseDirectory, "NLog.config");
         NLog.LogManager.Setup().LoadConfigurationFromFile(nlogConfigPath);
+
+        // Load application configuration from appsettings.json
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Production"}.json", optional: true)
+            .AddEnvironmentVariables()
+            .Build();
 
         Client = new DiscordSocketClient(new DiscordSocketConfig
         {
@@ -52,6 +62,14 @@ public class Startup
                 config.ClearProviders();
                 config.AddNLog();
             })
+            // Add configuration
+            .AddSingleton<IConfiguration>(configuration)
+            // Bind configuration sections to strongly-typed objects
+            .Configure<OpenAISettings>(configuration.GetSection("OpenAI"))
+            .Configure<CacheSettings>(configuration.GetSection("Cache"))
+            .Configure<RateLimitsSettings>(configuration.GetSection("RateLimits"))
+            .Configure<DiscordSettings>(configuration.GetSection("Discord"))
+            .Configure<CleanupSettings>(configuration.GetSection("Cleanup"))
             .AddDbContextFactory<TldrDbContext>(options =>
                 options.UseSqlite("Data Source=tldr.sqlite"))
             .AddSingleton<GuildAccessService>()
