@@ -31,10 +31,10 @@ Project roadmap and pending tasks.
 - [x] Show cache hit/miss status to users (footer shows "⚡ Cached" or "🆕 Fresh")
 
 ### Missing Core Features
-- [ ] **Use GuildSettings** - `PreferredSummaryDepth` and `AutoSummarizeEnabled` exist but are never used
-- [ ] Add `/tldr` with no params - use guild/user default depth
-- [ ] Add `/cost` command - show personal/guild usage statistics
-- [ ] Thread/forum channel support
+- [x] **Use GuildSettings** - `PreferredSummaryDepth` now used; `/tldr-config` for admins to set default
+- [x] Add `/tldr` with no params - uses guild's preferred depth (shows "(default)" in title)
+- [x] Add `/cost` command - shows total API cost, model info, and cost-saving tips
+- [x] Thread/forum channel support - works in threads and forum posts via ISocketMessageChannel
 
 ### Security
 - [ ] Add audit trail for admin changes (log who made the change)
@@ -133,6 +133,13 @@ Project roadmap and pending tasks.
 - [x] Visual distinction for cached vs fresh summaries - Color coding (Green/Purple/Orange/Red)
 - [x] Show cache hit/miss status - Footer displays "⚡ Cached (instant & free)" or "🆕 Fresh summary"
 
+### Core Features (January 2026)
+- [x] GuildSettingsService - Manages per-guild settings in database
+- [x] `/tldr` with optional depth - Uses guild's preferred depth when not specified
+- [x] `/tldr-config` command - Admins can set server's default summary depth
+- [x] `/cost` command - Shows total API cost with cost-saving tips
+- [x] Thread/forum channel support - ISocketMessageChannel handles both text and thread channels
+
 ### Security & Performance Audit (January 2026)
 - [x] Fix superuser privilege escalation (require guild owner)
 - [x] Fix DbContext singleton (use factory pattern)
@@ -162,7 +169,7 @@ Project roadmap and pending tasks.
 | Critical Bugs | 0 | ~~**FIX NOW**~~ ✅ |
 | Error Handling | 0 | ~~High~~ ✅ |
 | UX Improvements | 0 | ~~High~~ ✅ |
-| Missing Core Features | 4 | High |
+| Missing Core Features | 0 | ~~High~~ ✅ |
 | Security | 4 | High |
 | Feature Enhancements | 5 | Medium |
 | Performance | 3 | Medium |

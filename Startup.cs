@@ -53,6 +53,7 @@ public class Startup
             .AddDbContextFactory<TldrDbContext>(options =>
                 options.UseSqlite("Data Source=tldr.sqlite"))
             .AddSingleton<GuildAccessService>()
+            .AddSingleton<GuildSettingsService>()
             .AddSingleton(Collector)
             .AddSingleton(Logger)
             .AddSingleton<CostTrackerService>()
