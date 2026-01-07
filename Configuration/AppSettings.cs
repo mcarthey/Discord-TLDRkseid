@@ -1,5 +1,10 @@
 namespace DiscordPA.Configuration;
 
+public class DatabaseSettings
+{
+    public string Path { get; set; } = "tldr.sqlite";
+}
+
 public class OpenAISettings
 {
     public string Model { get; set; } = "gpt-3.5-turbo";

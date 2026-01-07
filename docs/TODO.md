@@ -111,8 +111,9 @@ Project roadmap and pending tasks.
 
 #### Environment Configuration
 - [ ] **Create production .env** - Copy from `.env.example`, fill with production values
-- [ ] **Set DISCORD_TOKEN** - Production bot token
+- [ ] **Set DISCORD_BOT_TOKEN** - Production bot token
 - [ ] **Set OPENAI_API_KEY** - Production API key with spending limits
+- [ ] **Set DATABASE_PATH** (optional) - Path to SQLite database (default: `tldr.sqlite`)
 - [ ] **Remove DISCORD_DEV_GUILD_ID** - Ensures commands register globally, not to dev server
 - [ ] **Configure rate limits** - Review if default limits are appropriate for production load
 

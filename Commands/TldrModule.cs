@@ -348,7 +348,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                     "• Use lower depth levels when possible\n" +
                     "• Filter by user to reduce token count",
                     inline: false)
-                .WithFooter("Cost resets when bot restarts • Data persisted to total_cost.json");
+                .WithFooter("Cost data persisted to database • Per-guild tracking enabled");
 
             _logger.LogInformation("Providing cost statistics. Total: ${Total:F4}", totalCost);
             await RespondAsync(embed: embed.Build(), ephemeral: true);

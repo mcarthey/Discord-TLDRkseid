@@ -41,6 +41,16 @@ public class Startup
             .AddEnvironmentVariables()
             .Build();
 
+        // Ensure logs directory exists for NLog
+        var logsPath = Path.Combine(AppContext.BaseDirectory, "logs");
+        Directory.CreateDirectory(logsPath);
+
+        // Get database path from environment variable or config (env var takes precedence)
+        var databasePath = Environment.GetEnvironmentVariable("DATABASE_PATH")
+            ?? configuration.GetValue<string>("Database:Path")
+            ?? "tldr.sqlite";
+        var connectionString = $"Data Source={databasePath}";
+
         Client = new DiscordSocketClient(new DiscordSocketConfig
         {
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
@@ -71,7 +81,7 @@ public class Startup
             .Configure<DiscordSettings>(configuration.GetSection("Discord"))
             .Configure<CleanupSettings>(configuration.GetSection("Cleanup"))
             .AddDbContextFactory<TldrDbContext>(options =>
-                options.UseSqlite("Data Source=tldr.sqlite"))
+                options.UseSqlite(connectionString))
             .AddSingleton<GuildAccessService>()
             .AddSingleton<GuildSettingsService>()
             .AddSingleton(Collector)
