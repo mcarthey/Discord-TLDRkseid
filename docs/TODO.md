@@ -100,14 +100,91 @@ Project roadmap and pending tasks.
 
 ## Deployment & Release
 
-- [ ] Create landing page for public bot
-- [ ] Choose and configure hosting platform
-- [ ] Set up production environment variables
-- [ ] Configure custom domain (optional)
-- [ ] Submit to bot listing sites (top.gg, discord.bots.gg)
-- [ ] Add LICENSE file
-- [ ] Create CONTRIBUTING.md
-- [ ] Add bot invite link to README
+### Pre-Deployment Checklist (REQUIRED)
+
+#### Security & Secrets
+- [ ] **Generate production bot token** - Create new token in Discord Developer Portal (don't reuse dev token)
+- [ ] **Generate production OpenAI API key** - Create dedicated key with usage limits
+- [ ] **Verify .gitignore** - Ensure `.env`, `tldr.sqlite`, `total_cost.json`, and `logs/` are excluded
+- [ ] **Review bot permissions** - Minimize OAuth2 scopes to only what's needed
+- [ ] **Set up secrets management** - Use hosting platform's secret storage (not plain text env files)
+
+#### Environment Configuration
+- [ ] **Create production .env** - Copy from `.env.example`, fill with production values
+- [ ] **Set DISCORD_TOKEN** - Production bot token
+- [ ] **Set OPENAI_API_KEY** - Production API key with spending limits
+- [ ] **Remove DISCORD_DEV_GUILD_ID** - Ensures commands register globally, not to dev server
+- [ ] **Configure rate limits** - Review if default limits are appropriate for production load
+
+#### Database
+- [ ] **Initialize fresh production database** - Don't copy dev database with test data
+- [ ] **Run migrations** - `dotnet ef database update` or let app run migrations on startup
+- [ ] **Set up database backups** - Automated daily backups of `tldr.sqlite`
+- [ ] **Consider database location** - Persistent volume for Docker/container deployments
+
+#### Build & Test
+- [ ] **Run production build** - `dotnet publish -c Release`
+- [ ] **Test in staging environment** - Deploy to test server first
+- [ ] **Verify all commands work** - Test `/tldr`, `/cost`, `/tldr-config`, `/tldr-help`
+- [ ] **Test admin commands** - Verify `!admin` commands work correctly
+- [ ] **Load test** - Verify bot handles concurrent requests gracefully
+
+### Docker Deployment (If Using Containers)
+
+- [ ] **Create Dockerfile** - Multi-stage build for smaller image
+- [ ] **Create docker-compose.yml** - For local testing and simple deployments
+- [ ] **Configure persistent volumes** - For `tldr.sqlite`, `total_cost.json`, and `logs/`
+- [ ] **Set up health checks** - Container health monitoring
+- [ ] **Configure restart policy** - `restart: unless-stopped` or equivalent
+
+### Hosting Platform Setup
+
+- [ ] **Choose hosting platform** - See notes below for options
+- [ ] **Configure compute resources** - Minimum 512MB RAM recommended
+- [ ] **Set up persistent storage** - For SQLite database and cost tracking
+- [ ] **Configure environment variables** - Via platform's secrets/env management
+- [ ] **Set up deployment pipeline** - GitHub Actions or platform's built-in CI/CD
+- [ ] **Configure domain/subdomain** (optional) - For web dashboard if implemented
+
+### Monitoring & Reliability
+
+- [ ] **Set up uptime monitoring** - UptimeRobot, Healthchecks.io, or similar
+- [ ] **Configure alerting** - Notify on bot downtime or errors
+- [ ] **Set up log aggregation** - Review logs for errors and issues
+- [ ] **Monitor API costs** - Set up OpenAI usage alerts/limits
+- [ ] **Discord status monitoring** - Check bot appears online
+
+### Legal & Compliance
+
+- [ ] **Create Privacy Policy** - Required for bot listings; explain data handling
+- [ ] **Create Terms of Service** - Usage terms for the bot
+- [ ] **Add data retention policy** - How long messages/logs are kept
+- [ ] **GDPR considerations** - If serving EU users, ensure compliance
+- [ ] **OpenAI usage disclosure** - Inform users messages are sent to OpenAI
+
+### Discord Bot Verification (If 100+ Servers)
+
+- [ ] **Prepare verification application** - Required when bot joins 75+ servers
+- [ ] **Document bot functionality** - Clear description of what bot does
+- [ ] **Privacy policy URL** - Required for verification
+- [ ] **Terms of service URL** - Required for verification
+- [ ] **Privileged intents justification** - Explain why Message Content intent is needed
+
+### Public Release
+
+- [ ] **Add LICENSE file** - MIT, Apache 2.0, or other appropriate license
+- [ ] **Create CONTRIBUTING.md** - Guidelines for contributors
+- [ ] **Add bot invite link to README** - OAuth2 URL with correct permissions
+- [ ] **Create landing page** (optional) - Simple site explaining the bot
+- [ ] **Submit to bot listing sites** - top.gg, discord.bots.gg, discordbotlist.com
+- [ ] **Create support server** (optional) - Discord server for bot support
+
+### Post-Deployment
+
+- [ ] **Monitor initial usage** - Watch for errors in first 24-48 hours
+- [ ] **Gather user feedback** - Set up feedback channel or form
+- [ ] **Document known issues** - Track and communicate any limitations
+- [ ] **Plan maintenance windows** - Schedule updates during low-usage times
 
 ---
 
@@ -177,6 +254,7 @@ Project roadmap and pending tasks.
 | UX Improvements | 0 | ~~High~~ ✅ |
 | Missing Core Features | 0 | ~~High~~ ✅ |
 | Security | 0 | ~~High~~ ✅ |
+| **Deployment** | **~40** | **High - Before Launch** |
 | Feature Enhancements | 5 | Medium |
 | Performance | 3 | Medium |
 | Admin Features | 4 | Medium |
@@ -187,15 +265,17 @@ Project roadmap and pending tasks.
 
 ---
 
-## Quick Wins (Easy + High Impact)
+## Quick Wins (Completed)
 
 1. ~~Fix admin command null reference crash~~ ✅
-2. Add "thinking..." indicator
-3. Add `/cost` command
-4. Better permission error messages
-5. Visual distinction for cached summaries
+2. ~~Add "thinking..." indicator~~ ✅
+3. ~~Add `/cost` command~~ ✅
+4. ~~Better permission error messages~~ ✅
+5. ~~Visual distinction for cached summaries~~ ✅
 6. ~~Add timeout to API calls~~ ✅
-7. Use `GuildSettings.PreferredSummaryDepth`
+7. ~~Use `GuildSettings.PreferredSummaryDepth`~~ ✅
+
+All quick wins have been completed!
 
 ---
 
