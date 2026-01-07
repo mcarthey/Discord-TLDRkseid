@@ -15,6 +15,11 @@ public class SpamBlockerService : IDisposable
     private readonly TimeSpan _adminBurstWindow = TimeSpan.FromSeconds(30);
     private readonly int _adminBurstThreshold = 10;
 
+    // Database write rate limiting (per guild)
+    private readonly TimeSpan _dbWriteCooldown = TimeSpan.FromSeconds(2);
+    private readonly TimeSpan _dbWriteBurstWindow = TimeSpan.FromMinutes(1);
+    private readonly int _dbWriteBurstThreshold = 20;
+
     // (guildId-channelId-userId) => last request timestamp
     private readonly ConcurrentDictionary<string, DateTime> _lastRequestMap = new();
     private readonly ConcurrentDictionary<string, Queue<DateTime>> _recentRequestsMap = new();
@@ -23,6 +28,10 @@ public class SpamBlockerService : IDisposable
     // Admin command tracking
     private readonly ConcurrentDictionary<string, DateTime> _lastAdminCommandMap = new();
     private readonly ConcurrentDictionary<string, Queue<DateTime>> _adminBurstMap = new();
+
+    // Database write tracking (per guild)
+    private readonly ConcurrentDictionary<string, DateTime> _lastDbWriteMap = new();
+    private readonly ConcurrentDictionary<string, Queue<DateTime>> _dbWriteBurstMap = new();
 
     private readonly Timer _cleanupTimer;
 
@@ -126,6 +135,41 @@ public class SpamBlockerService : IDisposable
         return false;
     }
 
+    public bool IsDatabaseWriteRateLimited(ulong guildId, out string reason)
+    {
+        reason = string.Empty;
+        var key = $"dbwrite-{guildId}";
+        var now = DateTime.UtcNow;
+
+        // Cooldown check - minimum time between database writes
+        if (_lastDbWriteMap.TryGetValue(key, out var lastTime) &&
+            (now - lastTime) < _dbWriteCooldown)
+        {
+            var remaining = (_dbWriteCooldown - (now - lastTime)).TotalSeconds;
+            reason = $"⏳ **Rate limited** - Database operations have a {_dbWriteCooldown.TotalSeconds:F0}s cooldown. Try again in {remaining:F1}s.";
+            return true;
+        }
+
+        _lastDbWriteMap[key] = now;
+
+        // Burst detection - too many database writes in window
+        var queue = _dbWriteBurstMap.GetOrAdd(key, _ => new Queue<DateTime>());
+        lock (queue)
+        {
+            queue.Enqueue(now);
+            while (queue.Count > 0 && (now - queue.Peek()) > _dbWriteBurstWindow)
+                queue.Dequeue();
+
+            if (queue.Count > _dbWriteBurstThreshold)
+            {
+                reason = $"⚠️ **Rate limited** - Too many database operations ({_dbWriteBurstThreshold}) in {_dbWriteBurstWindow.TotalMinutes:F0} minute(s). Please wait before trying again.";
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void CleanupStaleEntries()
     {
         var cutoff = DateTime.UtcNow - EntryExpiration;
@@ -197,6 +241,35 @@ public class SpamBlockerService : IDisposable
         foreach (var key in staleQueueKeys)
         {
             _adminBurstMap.TryRemove(key, out _);
+        }
+
+        // Cleanup database write tracking
+        staleKeys = _lastDbWriteMap
+            .Where(kvp => kvp.Value < cutoff)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in staleKeys)
+        {
+            _lastDbWriteMap.TryRemove(key, out _);
+        }
+
+        // Cleanup database write burst queues
+        staleQueueKeys = _dbWriteBurstMap
+            .Where(kvp =>
+            {
+                lock (kvp.Value)
+                {
+                    return kvp.Value.Count == 0 ||
+                           (kvp.Value.Count > 0 && kvp.Value.Peek() < cutoff);
+                }
+            })
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in staleQueueKeys)
+        {
+            _dbWriteBurstMap.TryRemove(key, out _);
         }
     }
 

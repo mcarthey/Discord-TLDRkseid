@@ -405,6 +405,14 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 return;
             }
 
+            // Check rate limiting before database write
+            if (_guildSettings.IsRateLimited(Context.Guild.Id, out var rateLimitReason))
+            {
+                _logger.LogWarning("Config change rate limited for guild {GuildId}: {Reason}", Context.Guild.Id, rateLimitReason);
+                await RespondAsync(rateLimitReason, ephemeral: true);
+                return;
+            }
+
             await _guildSettings.SetPreferredDepthAsync(Context.Guild.Id, defaultDepth);
             _logger.LogInformation("Admin {UserId} set default depth to {Depth} for guild {GuildId}",
                 Context.User.Id, defaultDepth, Context.Guild.Id);

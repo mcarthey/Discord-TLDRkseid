@@ -6,6 +6,7 @@ namespace DiscordPA.Services;
 public class GuildSettingsService
 {
     private readonly IDbContextFactory<TldrDbContext> _dbFactory;
+    private readonly SpamBlockerService _spamBlocker;
 
     // Valid depth options
     private static readonly HashSet<string> ValidDepths = new(StringComparer.OrdinalIgnoreCase)
@@ -15,9 +16,15 @@ public class GuildSettingsService
 
     public const string DefaultDepth = "standard";
 
-    public GuildSettingsService(IDbContextFactory<TldrDbContext> dbFactory)
+    public GuildSettingsService(IDbContextFactory<TldrDbContext> dbFactory, SpamBlockerService spamBlocker)
     {
         _dbFactory = dbFactory;
+        _spamBlocker = spamBlocker;
+    }
+
+    public bool IsRateLimited(ulong guildId, out string reason)
+    {
+        return _spamBlocker.IsDatabaseWriteRateLimited(guildId, out reason);
     }
 
     public async Task<GuildSettings> GetOrCreateAsync(ulong guildId)

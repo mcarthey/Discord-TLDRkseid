@@ -27,7 +27,9 @@ public class Startup
 
     public async Task InitializeAsync()
     {
-        NLog.LogManager.Setup().LoadConfigurationFromFile("NLog.config");
+        // Load NLog config from application base directory (works for both Windows and Linux/Docker)
+        var nlogConfigPath = Path.Combine(AppContext.BaseDirectory, "NLog.config");
+        NLog.LogManager.Setup().LoadConfigurationFromFile(nlogConfigPath);
 
         Client = new DiscordSocketClient(new DiscordSocketConfig
         {

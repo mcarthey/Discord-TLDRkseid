@@ -365,3 +365,4 @@ FodyWeavers.xsd
 # Custom
 .env
 /tldr.sqlite
+docs/Security-Performance-Audit.md

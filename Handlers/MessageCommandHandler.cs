@@ -150,6 +150,16 @@ public class MessageCommandHandler : IAsyncDisposable
             _logger.LogInformation("Processing admin command {Command} from message {MessageId} at {Timestamp}", args[1], message.Id, message.Timestamp);
 
             var command = args[1].ToLowerInvariant();
+
+            // Check database rate limiting for write operations
+            var isWriteCommand = command is "add-superuser" or "add" or "remove" or "transfer-superuser" or "revoke-superuser";
+            if (isWriteCommand && _access.IsRateLimited(guildId, out var rateLimitReason))
+            {
+                _logger.LogWarning("Database write rate limited for guild {GuildId}: {Reason}", guildId, rateLimitReason);
+                await EphemeralReply(rateLimitReason);
+                return;
+            }
+
             switch (command)
             {
                 case "add-superuser":
@@ -173,10 +183,9 @@ public class MessageCommandHandler : IAsyncDisposable
                         await EphemeralReply("⚠️ Tag a user: `!admin add-superuser @user`");
                         return;
                     }
-                    var assigned = await _access.TryAssignSuperuserAsync(guildId, newSuperuser.Id);
+                    var assigned = await _access.TryAssignSuperuserAsync(guildId, newSuperuser.Id, userId);
                     if (assigned)
                     {
-                        _logger.LogInformation("Assigned superuser {Username} in guild {GuildId}", newSuperuser.Username, guildId);
                         await EphemeralReply($"👑 `{newSuperuser.Username}` is now the **superuser** for this server.");
                     }
                     else
@@ -202,11 +211,10 @@ public class MessageCommandHandler : IAsyncDisposable
                         return;
                     }
                     var action = command == "add"
-                        ? await _access.AddAdminAsync(guildId, targetUser.Id)
-                        : await _access.RemoveAdminAsync(guildId, targetUser.Id);
+                        ? await _access.AddAdminAsync(guildId, targetUser.Id, userId)
+                        : await _access.RemoveAdminAsync(guildId, targetUser.Id, userId);
                     var verb = command == "add" ? "added as" : "removed from";
                     var alreadyText = command == "add" ? "already" : "not";
-                    _logger.LogInformation("Admin command {Command}: {Username} {Verb} admin in guild {GuildId}", command, targetUser.Username, verb, guildId);
                     await EphemeralReply(action
                         ? $"✅ `{targetUser.Username}` was {verb} admin."
                         : $"⚠️ `{targetUser.Username}` was {alreadyText} an admin.");
@@ -272,9 +280,54 @@ public class MessageCommandHandler : IAsyncDisposable
                     await EphemeralReply("✅ All slash commands (guild + global) cleaned and refreshed for this server.");
                     break;
 
+                case "transfer-superuser":
+                    // Only server owner can transfer superuser
+                    if (channel.Guild.OwnerId != userId)
+                    {
+                        _logger.LogWarning("Non-owner user {UserId} attempted to transfer superuser in guild {GuildId}", userId, guildId);
+                        await EphemeralReply("⛔ Only the server owner can transfer superuser.");
+                        return;
+                    }
+                    var transferTarget = message.MentionedUsers.FirstOrDefault();
+                    if (args.Length < 3 || transferTarget == null)
+                    {
+                        _logger.LogWarning("transfer-superuser command missing user mention.");
+                        await EphemeralReply("⚠️ Tag a user: `!admin transfer-superuser @user`");
+                        return;
+                    }
+                    var transferred = await _access.TransferSuperuserAsync(guildId, transferTarget.Id, userId);
+                    if (transferred)
+                    {
+                        await EphemeralReply($"👑 Superuser transferred to `{transferTarget.Username}`.");
+                    }
+                    else
+                    {
+                        await EphemeralReply("❌ No superuser to transfer. Use `!admin add-superuser @user` first.");
+                    }
+                    break;
+
+                case "revoke-superuser":
+                    // Only server owner can revoke superuser
+                    if (channel.Guild.OwnerId != userId)
+                    {
+                        _logger.LogWarning("Non-owner user {UserId} attempted to revoke superuser in guild {GuildId}", userId, guildId);
+                        await EphemeralReply("⛔ Only the server owner can revoke superuser.");
+                        return;
+                    }
+                    var revoked = await _access.RevokeSuperuserAsync(guildId, userId);
+                    if (revoked)
+                    {
+                        await EphemeralReply("✅ Superuser has been revoked. Use `!admin add-superuser @user` to assign a new one.");
+                    }
+                    else
+                    {
+                        await EphemeralReply("⚠️ No superuser is currently assigned.");
+                    }
+                    break;
+
                 default:
                     _logger.LogWarning("Unknown admin command received: {Command}", command);
-                    await EphemeralReply("❓ Unknown subcommand. Try `add`, `remove`, `list`, `whoami`, `refresh`, or `add-superuser`.");
+                    await EphemeralReply("❓ Unknown subcommand. Try `add`, `remove`, `list`, `whoami`, `refresh`, `add-superuser`, `transfer-superuser`, or `revoke-superuser`.");
                     break;
             }
         }

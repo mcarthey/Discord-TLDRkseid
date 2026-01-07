@@ -37,10 +37,10 @@ Project roadmap and pending tasks.
 - [x] Thread/forum channel support - works in threads and forum posts via ISocketMessageChannel
 
 ### Security
-- [ ] Add audit trail for admin changes (log who made the change)
-- [ ] Allow superuser transfer/revocation by server owner
-- [ ] Rate limit database write operations
-- [ ] Fix NLog config path for Linux/Docker (`NLog.config:7`)
+- [x] Add audit trail for admin changes (log who made the change)
+- [x] Allow superuser transfer/revocation by server owner
+- [x] Rate limit database write operations
+- [x] Fix NLog config path for Linux/Docker (`NLog.config:7`)
 
 ---
 
@@ -160,6 +160,12 @@ Project roadmap and pending tasks.
 - [x] Create .env.example template
 - [x] Create docs/TODO.md
 
+### Security Improvements (January 2026)
+- [x] Add audit trail for admin changes - All GuildAccessService write operations log actor ID
+- [x] Allow superuser transfer/revocation by server owner - Added `!admin transfer-superuser` and `!admin revoke-superuser`
+- [x] Rate limit database write operations - SpamBlockerService now includes per-guild DB write limiting
+- [x] Fix NLog config path for Linux/Docker - Changed from hardcoded `c:\temp` to `${basedir}/logs/`
+
 ---
 
 ## Issue Summary
@@ -170,7 +176,7 @@ Project roadmap and pending tasks.
 | Error Handling | 0 | ~~High~~ ✅ |
 | UX Improvements | 0 | ~~High~~ ✅ |
 | Missing Core Features | 0 | ~~High~~ ✅ |
-| Security | 4 | High |
+| Security | 0 | ~~High~~ ✅ |
 | Feature Enhancements | 5 | Medium |
 | Performance | 3 | Medium |
 | Admin Features | 4 | Medium |
