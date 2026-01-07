@@ -3,19 +3,23 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using DiscordPA.Services;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DiscordPA.Handlers;
 
-public class MessageCommandHandler
+public class MessageCommandHandler : IAsyncDisposable
 {
     private readonly GuildAccessService _access;
     private readonly DiscordSocketClient _client;
     private readonly InteractionService _interactions;
     private readonly ILogger<MessageCommandHandler> _logger;
     private readonly SpamBlockerService _spamBlocker;
+    private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly ConcurrentDictionary<Guid, Task> _pendingDeletes = new();
 
     public MessageCommandHandler(
         GuildAccessService access,
@@ -31,17 +35,47 @@ public class MessageCommandHandler
         _spamBlocker = spamBlocker;
     }
 
-    private async Task DeleteAfterAsync(IMessage msg, int delayMs = 10000)
+    private void ScheduleDelete(IMessage msg, int delayMs = 10000)
     {
-        await Task.Delay(delayMs);
+        var taskId = Guid.NewGuid();
+        var task = DeleteAfterAsync(msg, delayMs, taskId, _shutdownCts.Token);
+        _pendingDeletes.TryAdd(taskId, task);
+    }
+
+    private async Task DeleteAfterAsync(IMessage msg, int delayMs, Guid taskId, CancellationToken ct)
+    {
         try
         {
+            await Task.Delay(delayMs, ct);
             await msg.DeleteAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown requested - expected, don't log as warning
         }
         catch (System.Exception ex)
         {
             _logger.LogWarning(ex, "Failed to delete message {MessageId}", msg.Id);
         }
+        finally
+        {
+            _pendingDeletes.TryRemove(taskId, out _);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _shutdownCts.Cancel();
+
+        // Wait for all pending deletes to complete (with timeout)
+        var pendingTasks = _pendingDeletes.Values.ToArray();
+        if (pendingTasks.Length > 0)
+        {
+            _logger.LogInformation("Waiting for {Count} pending message deletes to complete...", pendingTasks.Length);
+            await Task.WhenAll(pendingTasks).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        _shutdownCts.Dispose();
     }
 
     public async Task HandleAsync(SocketMessage rawMessage)
@@ -83,8 +117,8 @@ public class MessageCommandHandler
             {
                 _logger.LogWarning("Admin command rate limited for user {InvokerId}: {Reason}", message.Author.Id, spamReason);
                 var rateLimitReply = await channel.SendMessageAsync($"{message.Author.Mention} {spamReason}");
-                _ = DeleteAfterAsync(message, 5000);
-                _ = DeleteAfterAsync(rateLimitReply, 5000);
+                ScheduleDelete(message, 5000);
+                ScheduleDelete(rateLimitReply, 5000);
                 return;
             }
 
@@ -96,14 +130,14 @@ public class MessageCommandHandler
             var args = content.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
 
             // Delete the original message after 10s
-            _ = DeleteAfterAsync(message);
+            ScheduleDelete(message);
 
             // Helper local function to reply ephemerally and then delete the response
             async Task EphemeralReply(string text)
             {
                 var reply = await channel.SendMessageAsync($"{message.Author.Mention} {text}");
                 _logger.LogInformation("Sent ephemeral reply: {ReplyText}", text);
-                _ = DeleteAfterAsync(reply);
+                ScheduleDelete(reply);
             }
 
             if (args.Length < 2)
@@ -132,13 +166,13 @@ public class MessageCommandHandler
                         await EphemeralReply("⚠️ A superuser is already assigned for this server.");
                         return;
                     }
-                    if (args.Length < 3 || message.MentionedUsers.Count == 0)
+                    var newSuperuser = message.MentionedUsers.FirstOrDefault();
+                    if (args.Length < 3 || newSuperuser == null)
                     {
                         _logger.LogWarning("add-superuser command missing user mention.");
                         await EphemeralReply("⚠️ Tag a user: `!admin add-superuser @user`");
                         return;
                     }
-                    var newSuperuser = message.MentionedUsers.First();
                     var assigned = await _access.TryAssignSuperuserAsync(guildId, newSuperuser.Id);
                     if (assigned)
                     {
@@ -160,13 +194,13 @@ public class MessageCommandHandler
                         await EphemeralReply("⛔ Only the superuser can manage admins.");
                         return;
                     }
-                    if (args.Length < 3 || message.MentionedUsers.Count == 0)
+                    var targetUser = message.MentionedUsers.FirstOrDefault();
+                    if (args.Length < 3 || targetUser == null)
                     {
                         _logger.LogWarning("Missing user mention in admin {Command} command.", command);
                         await EphemeralReply($"⚠️ Tag a user: `!admin {command} @user`");
                         return;
                     }
-                    var targetUser = message.MentionedUsers.First();
                     var action = command == "add"
                         ? await _access.AddAdminAsync(guildId, targetUser.Id)
                         : await _access.RemoveAdminAsync(guildId, targetUser.Id);

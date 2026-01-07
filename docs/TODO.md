@@ -7,10 +7,10 @@ Project roadmap and pending tasks.
 ## Critical Bugs - Fix Before Release
 
 ### Bug Fixes
-- [ ] **Admin command crash** - `MentionedUsers.First()` can throw if list changes between check and access (`MessageCommandHandler.cs:141, 169`)
-- [ ] **Cache TTL race condition** - TOCTOU bug in cache expiration check (`SummaryCacheService.cs:52-64`)
-- [ ] **Cost tracking data loss** - File save not atomic; data loss on crash (`CostTrackerService.cs:19-31`)
-- [ ] **Fire-and-forget tasks** - `DeleteAfterAsync` tasks may run after shutdown (`MessageCommandHandler.cs:86-87`)
+- [x] **Admin command crash** - `MentionedUsers.First()` can throw if list changes between check and access - FIXED: Changed to `FirstOrDefault()` with null check
+- [x] **Cache TTL race condition** - TOCTOU bug in cache expiration check - FIXED: Capture values atomically before use
+- [x] **Cost tracking data loss** - File save not atomic; data loss on crash - FIXED: Atomic write pattern (temp file + rename)
+- [x] **Fire-and-forget tasks** - `DeleteAfterAsync` tasks may run after shutdown - FIXED: Task tracking with cancellation and await on shutdown
 
 ### Error Handling
 - [ ] Add timeout to OpenAI API calls (Discord interaction expires after 3s)
@@ -113,6 +113,12 @@ Project roadmap and pending tasks.
 
 ## Completed
 
+### Critical Bug Fixes (January 2026)
+- [x] Fix admin command crash - `MentionedUsers.First()` changed to `FirstOrDefault()` with null check
+- [x] Fix cache TTL race condition - TOCTOU bug fixed by capturing values atomically
+- [x] Fix cost tracking data loss - Implemented atomic file writes (temp file + rename)
+- [x] Fix fire-and-forget tasks - Added task tracking with cancellation and await on shutdown
+
 ### Security & Performance Audit (January 2026)
 - [x] Fix superuser privilege escalation (require guild owner)
 - [x] Fix DbContext singleton (use factory pattern)
@@ -139,7 +145,7 @@ Project roadmap and pending tasks.
 
 | Category | Count | Priority |
 |----------|-------|----------|
-| Critical Bugs | 4 | **FIX NOW** |
+| Critical Bugs | 0 | ~~**FIX NOW**~~ ✅ |
 | Error Handling | 5 | High |
 | UX Improvements | 5 | High |
 | Missing Core Features | 4 | High |
@@ -156,7 +162,7 @@ Project roadmap and pending tasks.
 
 ## Quick Wins (Easy + High Impact)
 
-1. Fix admin command null reference crash
+1. ~~Fix admin command null reference crash~~ ✅
 2. Add "thinking..." indicator
 3. Add `/cost` command
 4. Better permission error messages

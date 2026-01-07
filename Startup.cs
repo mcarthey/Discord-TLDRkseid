@@ -134,6 +134,13 @@ public class Startup
         Client.Log -= Log;
         Client.MessageReceived -= MessageReceived;
 
+        // Dispose async services (await pending tasks)
+        var messageHandler = _services.GetService<MessageCommandHandler>();
+        if (messageHandler != null)
+        {
+            await messageHandler.DisposeAsync();
+        }
+
         // Stop and cleanup the Discord client
         if (Client != null)
         {

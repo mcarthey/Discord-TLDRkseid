@@ -48,39 +48,57 @@ public class SummaryCacheService
         var key = BuildKey(guildId, channelId, depth, userId);
         var now = DateTime.UtcNow;
 
-        // Direct match
-        if (_cache.TryGetValue(key, out var cached) && cached.MessageHash == hash)
+        // Direct match - copy values atomically to avoid TOCTOU race
+        if (_cache.TryGetValue(key, out var cached))
         {
-            // Check TTL
-            if (now - cached.CreatedUtc > CacheTtl)
-            {
-                _cache.TryRemove(key, out _);
-                return false;
-            }
+            // Capture values immediately to avoid race conditions
+            var cachedHash = cached.MessageHash;
+            var cachedCreatedUtc = cached.CreatedUtc;
+            var cachedSummary = cached.SummaryText;
+            var cachedCost = cached.Cost;
 
-            cached.LastAccessedUtc = now;
-            summary = cached.SummaryText;
-            cost = cached.Cost;
-            return true;
+            if (cachedHash == hash)
+            {
+                // Check TTL
+                if (now - cachedCreatedUtc > CacheTtl)
+                {
+                    _cache.TryRemove(key, out _);
+                    return false;
+                }
+
+                cached.LastAccessedUtc = now; // Best-effort update, not critical
+                summary = cachedSummary;
+                cost = cachedCost;
+                return true;
+            }
         }
 
         // Trickledown from deeper cached tiers
         foreach (var tier in DepthOrder.Where(t => DepthOrder[t.Key] > DepthOrder[depth]).OrderBy(t => t.Value))
         {
             var upKey = BuildKey(guildId, channelId, tier.Key, userId);
-            if (_cache.TryGetValue(upKey, out var upCached) && upCached.MessageHash == hash)
+            if (_cache.TryGetValue(upKey, out var upCached))
             {
-                // Check TTL
-                if (now - upCached.CreatedUtc > CacheTtl)
-                {
-                    _cache.TryRemove(upKey, out _);
-                    continue;
-                }
+                // Capture values immediately to avoid race conditions
+                var upCachedHash = upCached.MessageHash;
+                var upCachedCreatedUtc = upCached.CreatedUtc;
+                var upCachedSummary = upCached.SummaryText;
+                var upCachedCost = upCached.Cost;
 
-                upCached.LastAccessedUtc = now;
-                summary = $"🧠 Cached from `{tier.Key}` tier:\n\n{upCached.SummaryText}";
-                cost = upCached.Cost;
-                return true;
+                if (upCachedHash == hash)
+                {
+                    // Check TTL
+                    if (now - upCachedCreatedUtc > CacheTtl)
+                    {
+                        _cache.TryRemove(upKey, out _);
+                        continue;
+                    }
+
+                    upCached.LastAccessedUtc = now; // Best-effort update, not critical
+                    summary = $"🧠 Cached from `{tier.Key}` tier:\n\n{upCachedSummary}";
+                    cost = upCachedCost;
+                    return true;
+                }
             }
         }
 

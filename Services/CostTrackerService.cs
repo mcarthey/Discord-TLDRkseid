@@ -76,14 +76,22 @@ public class CostTrackerService
 
     private async Task SaveAsync()
     {
+        var tempFile = CostFile + ".tmp";
         try
         {
+            // Write to temp file first
             var json = JsonSerializer.Serialize(_total);
-            await File.WriteAllTextAsync(CostFile, json);
+            await File.WriteAllTextAsync(tempFile, json);
+
+            // Atomic rename - replaces target file if it exists
+            File.Move(tempFile, CostFile, overwrite: true);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to save total cost to {CostFile}", CostFile);
+
+            // Clean up temp file if it exists
+            try { File.Delete(tempFile); } catch { /* ignore cleanup failures */ }
         }
     }
 }
