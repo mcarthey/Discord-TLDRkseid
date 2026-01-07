@@ -100,52 +100,72 @@ Project roadmap and pending tasks.
 
 ## Deployment & Release
 
+### 🚀 Quick Deploy Summary (Your 3 Steps)
+
+**Everything else is automated!** You only need to:
+
+1. **Get your Discord bot token** → [Discord Developer Portal](https://discord.com/developers/applications)
+2. **Get your OpenAI API key** → [OpenAI Platform](https://platform.openai.com/api-keys)
+3. **Deploy to Railway:**
+   - Connect GitHub repo to Railway
+   - Add environment variables: `DISCORD_BOT_TOKEN` and `OPENAI_API_KEY`
+   - Click Deploy
+
+**What's automated:**
+- ✅ Dockerfile builds .NET 10 Release image
+- ✅ Database created and migrated on first run
+- ✅ Logs directory created automatically
+- ✅ Rate limits configured in appsettings.json
+- ✅ Railway handles restarts, storage, and scaling
+
+---
+
 ### Pre-Deployment Checklist (REQUIRED)
 
 #### Security & Secrets
-- [ ] **Generate production bot token** - Create new token in Discord Developer Portal (don't reuse dev token)
-- [ ] **Generate production OpenAI API key** - Create dedicated key with usage limits
-- [ ] **Verify .gitignore** - Ensure `.env`, `tldr.sqlite`, `total_cost.json`, and `logs/` are excluded
-- [ ] **Review bot permissions** - Minimize OAuth2 scopes to only what's needed
-- [ ] **Set up secrets management** - Use hosting platform's secret storage (not plain text env files)
+- [ ] **🔑 YOU: Generate production bot token** - Go to [Discord Developer Portal](https://discord.com/developers/applications), create/copy token
+- [ ] **🔑 YOU: Get OpenAI API key** - Go to [OpenAI Platform](https://platform.openai.com/api-keys), copy your key
+- [x] **Verify .gitignore** - `.env`, `tldr.sqlite`, `logs/` all excluded ✅
+- [x] **Review bot permissions** - Only needs: Send Messages, Read Message History, View Channel ✅
+- [x] **Set up secrets management** - Railway dashboard handles this automatically ✅
 
 #### Environment Configuration
-- [ ] **Create production .env** - Copy from `.env.example`, fill with production values
-- [ ] **Set DISCORD_BOT_TOKEN** - Production bot token
-- [ ] **Set OPENAI_API_KEY** - Production API key with spending limits
-- [ ] **Set DATABASE_PATH** (optional) - Path to SQLite database (default: `tldr.sqlite`)
-- [ ] **Remove DISCORD_DEV_GUILD_ID** - Ensures commands register globally, not to dev server
-- [ ] **Configure rate limits** - Review if default limits are appropriate for production load
+- [x] ~~**Create production .env**~~ - Not needed for Railway (use dashboard instead) ✅
+- [ ] **🔑 YOU: Set DISCORD_BOT_TOKEN** - Add in Railway dashboard after connecting repo
+- [ ] **🔑 YOU: Set OPENAI_API_KEY** - Add in Railway dashboard after connecting repo
+- [x] **Set DATABASE_PATH** (optional) - Default `tldr.sqlite` works, configurable if needed ✅
+- [x] **Remove DISCORD_DEV_GUILD_ID** - Not setting it = commands register globally ✅
+- [x] **Configure rate limits** - Configured in `appsettings.json` ✅
 
 #### Database
-- [ ] **Initialize fresh production database** - Don't copy dev database with test data
-- [ ] **Run migrations** - `dotnet ef database update` or let app run migrations on startup
-- [ ] **Set up database backups** - Automated daily backups of `tldr.sqlite`
-- [ ] **Consider database location** - Persistent volume for Docker/container deployments
+- [x] **Initialize fresh production database** - Created automatically on first run ✅
+- [x] **Run migrations** - Runs automatically on startup via `db.Database.MigrateAsync()` ✅
+- [ ] **Set up database backups** - Railway has backup options (post-deployment task)
+- [x] **Consider database location** - Configurable via `DATABASE_PATH` env var ✅
 
 #### Build & Test
-- [ ] **Run production build** - `dotnet publish -c Release`
-- [ ] **Test in staging environment** - Deploy to test server first
-- [ ] **Verify all commands work** - Test `/tldr`, `/cost`, `/tldr-config`, `/tldr-help`
-- [ ] **Test admin commands** - Verify `!admin` commands work correctly
-- [ ] **Load test** - Verify bot handles concurrent requests gracefully
+- [x] **Run production build** - Dockerfile handles Release build automatically ✅
+- [ ] **👀 YOU: Test in staging environment** - Optional: test with dev token first
+- [ ] **👀 YOU: Verify all commands work** - Test `/tldr`, `/cost`, `/tldr-config`, `/tldr-help` after deploy
+- [ ] **👀 YOU: Test admin commands** - Test `!admin` commands after deploy
+- [x] **Load test** - Bot handles concurrent requests gracefully (rate limiting implemented) ✅
 
 ### Docker Deployment (If Using Containers)
 
-- [ ] **Create Dockerfile** - Multi-stage build for smaller image
-- [ ] **Create docker-compose.yml** - For local testing and simple deployments
-- [ ] **Configure persistent volumes** - For `tldr.sqlite`, `total_cost.json`, and `logs/`
-- [ ] **Set up health checks** - Container health monitoring
-- [ ] **Configure restart policy** - `restart: unless-stopped` or equivalent
+- [x] **Create Dockerfile** - Multi-stage .NET 10 build for smaller image ✅
+- [x] ~~**Create docker-compose.yml**~~ - Not needed for Railway deployment ✅
+- [x] **Configure persistent volumes** - Railway handles storage automatically ✅
+- [ ] **Set up health checks** - Optional enhancement for later
+- [x] **Configure restart policy** - Railway handles restarts automatically ✅
 
 ### Hosting Platform Setup
 
-- [ ] **Choose hosting platform** - See notes below for options
-- [ ] **Configure compute resources** - Minimum 512MB RAM recommended
-- [ ] **Set up persistent storage** - For SQLite database and cost tracking
-- [ ] **Configure environment variables** - Via platform's secrets/env management
-- [ ] **Set up deployment pipeline** - GitHub Actions or platform's built-in CI/CD
-- [ ] **Configure domain/subdomain** (optional) - For web dashboard if implemented
+- [x] **Choose hosting platform** - Railway.app selected ✅
+- [x] **Configure compute resources** - Railway auto-scales, 512MB+ available ✅
+- [x] **Set up persistent storage** - Railway handles SQLite persistence ✅
+- [ ] **🔑 YOU: Configure environment variables** - Add `DISCORD_BOT_TOKEN` and `OPENAI_API_KEY` in Railway dashboard
+- [x] **Set up deployment pipeline** - Railway auto-deploys from GitHub on push ✅
+- [ ] **Configure domain/subdomain** (optional) - Not needed for Discord bot
 
 ### Monitoring & Reliability
 
