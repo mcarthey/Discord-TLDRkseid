@@ -1,5 +1,6 @@
 ﻿using Discord;
 using Discord.Interactions;
+using Discord.Net;
 using Discord.WebSocket;
 using DiscordPA.Services;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,16 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         { "deep", 400 },
         { "max", 500 }
     };
+
+    // Timeout for message fetch operations
+    private static readonly TimeSpan MessageFetchTimeout = TimeSpan.FromSeconds(15);
+
+    // Discord embed description limit
+    private const int EmbedDescriptionLimit = 4096;
+
+    // Retry settings for Discord API throttling
+    private const int MaxRetries = 3;
+    private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(1);
 
     public TldrModule(
         AiSummarizerService summarizer,
@@ -176,13 +187,24 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 }
             }
 
+            // Validate and truncate summary if it exceeds embed description limit
+            var displaySummary = summary;
+            var wasTruncated = false;
+            if (summary.Length > EmbedDescriptionLimit)
+            {
+                _logger.LogWarning("Summary exceeded embed limit ({Length} chars), truncating to {Limit}",
+                    summary.Length, EmbedDescriptionLimit);
+                displaySummary = summary[..(EmbedDescriptionLimit - 50)] + "\n\n*... (truncated due to length)*";
+                wasTruncated = true;
+            }
+
             var footerText = $"{(user != null ? $"Filtered by: {user.Username}" : "All users")} • " +
                              $"This summary cost: ${cost:F4} • Total spent: ${_costTracker.GetTotal():F2} • ☕";
 
             var embed = new EmbedBuilder()
-                .WithTitle($"TL;DRkseid Summary – {depth.ToUpper()}")
-                .WithDescription(summary)
-                .WithColor(depth == "max" ? Color.DarkRed : Color.DarkPurple)
+                .WithTitle($"TL;DRkseid Summary – {depth.ToUpper()}{(wasTruncated ? " (Truncated)" : "")}")
+                .WithDescription(displaySummary)
+                .WithColor(wasTruncated ? Color.Orange : (depth == "max" ? Color.DarkRed : Color.DarkPurple))
                 .WithFooter(new EmbedFooterBuilder { Text = footerText });
 
             var builder = new ComponentBuilder()
@@ -242,16 +264,26 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         var messages = new List<IMessage>();
         ulong? beforeMessageId = null;
 
-        while (messages.Count < count)
+        using var cts = new CancellationTokenSource(MessageFetchTimeout);
+
+        try
         {
-            var batch = beforeMessageId == null
-                ? await channel.GetMessagesAsync(limit: 100).FlattenAsync()
-                : await channel.GetMessagesAsync(beforeMessageId.Value, Direction.Before, 100).FlattenAsync();
+            while (messages.Count < count)
+            {
+                cts.Token.ThrowIfCancellationRequested();
 
-            if (!batch.Any()) break;
+                var batch = await FetchMessagesWithRetryAsync(channel, beforeMessageId, cts.Token);
 
-            messages.AddRange(batch);
-            beforeMessageId = batch.Min(m => m.Id);
+                if (!batch.Any()) break;
+
+                messages.AddRange(batch);
+                beforeMessageId = batch.Min(m => m.Id);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Message fetch timed out after {Timeout}s. Returning {Count} messages fetched so far.",
+                MessageFetchTimeout.TotalSeconds, messages.Count);
         }
 
         return messages
@@ -259,5 +291,39 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
             .OrderBy(m => m.Timestamp)
             .Take(count)
             .ToList();
+    }
+
+    private async Task<IEnumerable<IMessage>> FetchMessagesWithRetryAsync(
+        SocketTextChannel channel,
+        ulong? beforeMessageId,
+        CancellationToken ct)
+    {
+        var delay = InitialRetryDelay;
+
+        for (int attempt = 1; attempt <= MaxRetries; attempt++)
+        {
+            try
+            {
+                return beforeMessageId == null
+                    ? await channel.GetMessagesAsync(limit: 100).FlattenAsync()
+                    : await channel.GetMessagesAsync(beforeMessageId.Value, Direction.Before, 100).FlattenAsync();
+            }
+            catch (HttpException ex) when (ex.HttpCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                if (attempt == MaxRetries)
+                {
+                    _logger.LogWarning("Discord API rate limited after {Attempts} attempts", MaxRetries);
+                    throw;
+                }
+
+                _logger.LogDebug("Discord API rate limited, retrying in {Delay}ms (attempt {Attempt}/{MaxRetries})",
+                    delay.TotalMilliseconds, attempt, MaxRetries);
+
+                await Task.Delay(delay, ct);
+                delay *= 2; // Exponential backoff
+            }
+        }
+
+        return Enumerable.Empty<IMessage>();
     }
 }

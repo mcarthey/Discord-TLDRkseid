@@ -13,11 +13,11 @@ Project roadmap and pending tasks.
 - [x] **Fire-and-forget tasks** - `DeleteAfterAsync` tasks may run after shutdown - FIXED: Task tracking with cancellation and await on shutdown
 
 ### Error Handling
-- [ ] Add timeout to OpenAI API calls (Discord interaction expires after 3s)
-- [ ] Add timeout to message fetch operations
-- [ ] Add retry logic for Discord API throttling
-- [ ] Validate AI response length before creating embed (4096 char limit)
-- [ ] Better error categorization for OpenAI failures (401, 429, 500, 503)
+- [x] Add timeout to OpenAI API calls (30s timeout with proper error message)
+- [x] Add timeout to message fetch operations (15s timeout, returns partial results)
+- [x] Add retry logic for Discord API throttling (exponential backoff, max 3 retries)
+- [x] Validate AI response length before creating embed (4096 char limit, truncates with notice)
+- [x] Better error categorization for OpenAI failures (401, 429, 500, 503 with user-friendly messages)
 
 ---
 
@@ -119,6 +119,13 @@ Project roadmap and pending tasks.
 - [x] Fix cost tracking data loss - Implemented atomic file writes (temp file + rename)
 - [x] Fix fire-and-forget tasks - Added task tracking with cancellation and await on shutdown
 
+### Error Handling Improvements (January 2026)
+- [x] Add timeout to OpenAI API calls (30s with Task.WhenAny pattern)
+- [x] Add timeout to message fetch operations (15s, returns partial results gracefully)
+- [x] Add retry logic for Discord API throttling (exponential backoff, max 3 retries)
+- [x] Validate AI response length before creating embed (truncates at 4096 chars with notice)
+- [x] Better error categorization for OpenAI failures (401, 429, 500, 503 with user-friendly messages)
+
 ### Security & Performance Audit (January 2026)
 - [x] Fix superuser privilege escalation (require guild owner)
 - [x] Fix DbContext singleton (use factory pattern)
@@ -146,7 +153,7 @@ Project roadmap and pending tasks.
 | Category | Count | Priority |
 |----------|-------|----------|
 | Critical Bugs | 0 | ~~**FIX NOW**~~ ✅ |
-| Error Handling | 5 | High |
+| Error Handling | 0 | ~~High~~ ✅ |
 | UX Improvements | 5 | High |
 | Missing Core Features | 4 | High |
 | Security | 4 | High |
@@ -167,7 +174,7 @@ Project roadmap and pending tasks.
 3. Add `/cost` command
 4. Better permission error messages
 5. Visual distinction for cached summaries
-6. Add timeout to API calls
+6. ~~Add timeout to API calls~~ ✅
 7. Use `GuildSettings.PreferredSummaryDepth`
 
 ---
