@@ -2,16 +2,38 @@
 
 namespace DiscordPA.Services;
 
-public class SpamBlockerService
+public class SpamBlockerService : IDisposable
 {
     private readonly TimeSpan _cooldownDuration = TimeSpan.FromSeconds(30);
     private readonly TimeSpan _burstWindow = TimeSpan.FromSeconds(10);
     private readonly int _burstThreshold = 3;
+    private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan EntryExpiration = TimeSpan.FromMinutes(10);
+
+    // Admin command rate limiting
+    private readonly TimeSpan _adminCooldown = TimeSpan.FromSeconds(5);
+    private readonly TimeSpan _adminBurstWindow = TimeSpan.FromSeconds(30);
+    private readonly int _adminBurstThreshold = 10;
 
     // (guildId-channelId-userId) => last request timestamp
     private readonly ConcurrentDictionary<string, DateTime> _lastRequestMap = new();
     private readonly ConcurrentDictionary<string, Queue<DateTime>> _recentRequestsMap = new();
     private readonly ConcurrentDictionary<string, DateTime> _lastCachedReplyMap = new();
+
+    // Admin command tracking
+    private readonly ConcurrentDictionary<string, DateTime> _lastAdminCommandMap = new();
+    private readonly ConcurrentDictionary<string, Queue<DateTime>> _adminBurstMap = new();
+
+    private readonly Timer _cleanupTimer;
+
+    public SpamBlockerService()
+    {
+        _cleanupTimer = new Timer(
+            _ => CleanupStaleEntries(),
+            null,
+            CleanupInterval,
+            CleanupInterval);
+    }
 
     public bool IsCachedSpamming(string guildId, string channelId, string userId, out string reason)
     {
@@ -23,14 +45,12 @@ public class SpamBlockerService
         {
             var retry = 10 - (now - last).TotalSeconds;
             reason = $"🕓 You're requesting cached summaries too fast. Try again in {retry:F0}s.";
-            Console.WriteLine($"[SpamBlocker] Cached spam triggered for User:{userId} in Channel:{channelId} Guild:{guildId} | Retry in {retry:F0}s");
             return true;
         }
 
         _lastCachedReplyMap[key] = now;
         return false;
     }
-
 
     public bool IsSpamming(string guildId, string channelId, string userId, bool isAdmin, bool wasCached, out string reason)
     {
@@ -48,7 +68,6 @@ public class SpamBlockerService
         {
             var remaining = (_cooldownDuration - (now - lastTime)).TotalSeconds;
             reason = $"⏳ Slow down! Try again in {remaining:F0}s.";
-            Console.WriteLine($"[SpamBlocker] Cooldown triggered for User:{userId} in Channel:{channelId} Guild:{guildId} | Retry in {remaining:F0}s");
             return true;
         }
 
@@ -65,11 +84,124 @@ public class SpamBlockerService
             if (queue.Count >= _burstThreshold)
             {
                 reason = "⚠️ Whoa there! You're sending requests too quickly.";
-                Console.WriteLine($"[SpamBlocker] Burst limit hit for User:{userId} in Channel:{channelId} Guild:{guildId} | Count:{queue.Count} in {Math.Floor(_burstWindow.TotalSeconds)}s");
                 return true;
             }
         }
 
         return false;
+    }
+
+    public bool IsAdminCommandSpamming(string guildId, string userId, out string reason)
+    {
+        reason = string.Empty;
+        var key = $"admin-{guildId}-{userId}";
+        var now = DateTime.UtcNow;
+
+        // Cooldown check
+        if (_lastAdminCommandMap.TryGetValue(key, out var lastTime) &&
+            (now - lastTime) < _adminCooldown)
+        {
+            var remaining = (_adminCooldown - (now - lastTime)).TotalSeconds;
+            reason = $"⏳ Please wait {remaining:F0}s before using another admin command.";
+            return true;
+        }
+
+        _lastAdminCommandMap[key] = now;
+
+        // Burst detection
+        var queue = _adminBurstMap.GetOrAdd(key, _ => new Queue<DateTime>());
+        lock (queue)
+        {
+            queue.Enqueue(now);
+            while (queue.Count > 0 && (now - queue.Peek()) > _adminBurstWindow)
+                queue.Dequeue();
+
+            if (queue.Count > _adminBurstThreshold)
+            {
+                reason = "⚠️ Too many admin commands. Please slow down.";
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void CleanupStaleEntries()
+    {
+        var cutoff = DateTime.UtcNow - EntryExpiration;
+
+        // Cleanup last request map
+        var staleKeys = _lastRequestMap
+            .Where(kvp => kvp.Value < cutoff)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in staleKeys)
+        {
+            _lastRequestMap.TryRemove(key, out _);
+        }
+
+        // Cleanup cached reply map
+        staleKeys = _lastCachedReplyMap
+            .Where(kvp => kvp.Value < cutoff)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in staleKeys)
+        {
+            _lastCachedReplyMap.TryRemove(key, out _);
+        }
+
+        // Cleanup burst queues - remove empty or stale queues
+        var staleQueueKeys = _recentRequestsMap
+            .Where(kvp =>
+            {
+                lock (kvp.Value)
+                {
+                    return kvp.Value.Count == 0 ||
+                           (kvp.Value.Count > 0 && kvp.Value.Peek() < cutoff);
+                }
+            })
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in staleQueueKeys)
+        {
+            _recentRequestsMap.TryRemove(key, out _);
+        }
+
+        // Cleanup admin command tracking
+        staleKeys = _lastAdminCommandMap
+            .Where(kvp => kvp.Value < cutoff)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in staleKeys)
+        {
+            _lastAdminCommandMap.TryRemove(key, out _);
+        }
+
+        // Cleanup admin burst queues
+        staleQueueKeys = _adminBurstMap
+            .Where(kvp =>
+            {
+                lock (kvp.Value)
+                {
+                    return kvp.Value.Count == 0 ||
+                           (kvp.Value.Count > 0 && kvp.Value.Peek() < cutoff);
+                }
+            })
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in staleQueueKeys)
+        {
+            _adminBurstMap.TryRemove(key, out _);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cleanupTimer.Dispose();
     }
 }

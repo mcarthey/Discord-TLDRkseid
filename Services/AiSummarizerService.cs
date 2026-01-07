@@ -1,4 +1,5 @@
-﻿using OpenAI;
+﻿using Microsoft.Extensions.Logging;
+using OpenAI;
 using OpenAI.Interfaces;
 using OpenAI.Managers;
 using OpenAI.ObjectModels;
@@ -10,22 +11,24 @@ public class AiSummarizerService
 {
     private readonly IOpenAIService _service;
     private readonly CostTrackerService _costTracker;
+    private readonly ILogger<AiSummarizerService> _logger;
     private DateTime _lastRequestUtc = DateTime.MinValue;
 
-    public AiSummarizerService(string apiKey, CostTrackerService costTracker)
+    public AiSummarizerService(string apiKey, CostTrackerService costTracker, ILogger<AiSummarizerService> logger)
     {
         _service = new OpenAIService(new OpenAiOptions { ApiKey = apiKey });
         _costTracker = costTracker;
+        _logger = logger;
     }
 
     public async Task<(string Summary, double Cost)> SummarizeAsync(List<string> messages)
     {
-        // 🐢 Debounce protection
+        // Debounce protection
         var now = DateTime.UtcNow;
         var timeSinceLast = now - _lastRequestUtc;
         if (timeSinceLast.TotalSeconds < 2)
         {
-            Console.WriteLine($"[TLDrkseid] Debouncing AI call ({timeSinceLast.TotalMilliseconds:F0}ms since last call)");
+            _logger.LogDebug("Debouncing AI call ({ElapsedMs}ms since last call)", timeSinceLast.TotalMilliseconds);
             await Task.Delay(2000 - (int)timeSinceLast.TotalMilliseconds);
         }
         _lastRequestUtc = DateTime.UtcNow;
@@ -62,7 +65,7 @@ public class AiSummarizerService
         var totalTokens = result.Usage.TotalTokens;
         var cost = totalTokens * 0.002 / 1000.0;
 
-        _costTracker.Add(cost); // 🧮 Track cumulative spend
+        await _costTracker.AddAsync(cost);
 
         if (result.Successful && result.Choices != null && result.Choices.Any())
         {
@@ -75,9 +78,8 @@ public class AiSummarizerService
 
         if (!result.Successful)
         {
-            Console.WriteLine("[TLDrkseid] OpenAI request failed:");
-            Console.WriteLine($"Status: {result.HttpStatusCode}");
-            Console.WriteLine($"Error Message: {result.Error?.Message ?? "(none)"}");
+            _logger.LogError("OpenAI request failed. Status: {StatusCode}, Error: {ErrorMessage}",
+                result.HttpStatusCode, result.Error?.Message ?? "(none)");
 
             if (result.HttpStatusCode == System.Net.HttpStatusCode.TooManyRequests)
             {

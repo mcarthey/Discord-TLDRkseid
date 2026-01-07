@@ -15,17 +15,20 @@ public class MessageCommandHandler
     private readonly DiscordSocketClient _client;
     private readonly InteractionService _interactions;
     private readonly ILogger<MessageCommandHandler> _logger;
+    private readonly SpamBlockerService _spamBlocker;
 
     public MessageCommandHandler(
         GuildAccessService access,
         DiscordSocketClient client,
         InteractionService interactions,
-        ILogger<MessageCommandHandler> logger) // Inject logger
+        ILogger<MessageCommandHandler> logger,
+        SpamBlockerService spamBlocker)
     {
         _access = access;
         _client = client;
         _interactions = interactions;
         _logger = logger;
+        _spamBlocker = spamBlocker;
     }
 
     private async Task DeleteAfterAsync(IMessage msg, int delayMs = 10000)
@@ -75,6 +78,16 @@ public class MessageCommandHandler
             var content = message.Content.Trim();
             if (!content.StartsWith("!admin", System.StringComparison.OrdinalIgnoreCase)) return;
 
+            // Rate limiting check for admin commands
+            if (_spamBlocker.IsAdminCommandSpamming(channel.Guild.Id.ToString(), message.Author.Id.ToString(), out var spamReason))
+            {
+                _logger.LogWarning("Admin command rate limited for user {InvokerId}: {Reason}", message.Author.Id, spamReason);
+                var rateLimitReply = await channel.SendMessageAsync($"{message.Author.Mention} {spamReason}");
+                _ = DeleteAfterAsync(message, 5000);
+                _ = DeleteAfterAsync(rateLimitReply, 5000);
+                return;
+            }
+
             // Log that an admin command has been received.
             _logger.LogInformation("Admin command received from user {InvokerName} ({InvokerId})", message.Author.Username, message.Author.Id);
 
@@ -106,6 +119,13 @@ public class MessageCommandHandler
             switch (command)
             {
                 case "add-superuser":
+                    // Security: Only guild owner can assign superuser
+                    if (channel.Guild.OwnerId != userId)
+                    {
+                        _logger.LogWarning("Non-owner user {UserId} attempted to assign superuser in guild {GuildId}", userId, guildId);
+                        await EphemeralReply("⛔ Only the server owner can assign a superuser.");
+                        return;
+                    }
                     if (await _access.GetSuperuserAsync(guildId) != null)
                     {
                         _logger.LogWarning("Superuser already assigned for guild {GuildId}", guildId);

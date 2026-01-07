@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace DiscordPA.Services;
 
@@ -7,19 +8,21 @@ public class CostTrackerService
     private const string CostFile = "total_cost.json";
     private double _total = 0;
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly ILogger<CostTrackerService> _logger;
 
-    public CostTrackerService()
+    public CostTrackerService(ILogger<CostTrackerService> logger)
     {
-        Load();
+        _logger = logger;
+        LoadAsync().GetAwaiter().GetResult(); // Sync load on startup only
     }
 
-    public void Add(double amount)
+    public async Task AddAsync(double amount)
     {
-        _lock.Wait();
+        await _lock.WaitAsync();
         try
         {
             _total += amount;
-            Save();
+            await SaveAsync();
         }
         finally
         {
@@ -27,6 +30,20 @@ public class CostTrackerService
         }
     }
 
+    public async Task<double> GetTotalAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            return _total;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    // Synchronous version for non-async contexts (e.g., embed footer)
     public double GetTotal()
     {
         _lock.Wait();
@@ -40,32 +57,33 @@ public class CostTrackerService
         }
     }
 
-    private void Load()
+    private async Task LoadAsync()
     {
         try
         {
             if (File.Exists(CostFile))
             {
-                var json = File.ReadAllText(CostFile);
+                var json = await File.ReadAllTextAsync(CostFile);
                 _total = JsonSerializer.Deserialize<double>(json);
+                _logger.LogInformation("Loaded saved cost: ${Total:F4}", _total);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CostTracker] Failed to load saved cost: {ex.Message}");
+            _logger.LogWarning(ex, "Failed to load saved cost from {CostFile}", CostFile);
         }
     }
 
-    private void Save()
+    private async Task SaveAsync()
     {
         try
         {
             var json = JsonSerializer.Serialize(_total);
-            File.WriteAllText(CostFile, json);
+            await File.WriteAllTextAsync(CostFile, json);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CostTracker] Failed to save total cost: {ex.Message}");
+            _logger.LogWarning(ex, "Failed to save total cost to {CostFile}", CostFile);
         }
     }
 }

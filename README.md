@@ -1,89 +1,169 @@
-﻿# TLDrkseid  
-**A smart Discord bot that summarizes your server’s conversations using OpenAI.**  
-Built for clarity, built for teams, built for those who always ask: *“what did I miss?”*
+# TLDRkseid
+
+**A Discord bot that summarizes your server's conversations using AI.**
+
+*For those who always ask: "what did I miss?"*
+
+---
+
+## Add to Your Server
+
+**[Invite TLDRkseid to your server](#)** *(link coming soon)*
+
+Or self-host your own instance - see [Self-Hosting Guide](#self-hosting) below.
+
+---
+
+## Quick Start
+
+Once the bot is in your server:
+
+1. **Get a summary:** `/tldr depth:standard`
+2. **Filter by user:** `/tldr depth:brief user:@someone`
+3. **See all options:** `/tldr-help`
+
+That's it! The bot responds privately (ephemeral) so it won't clutter your channels.
 
 ---
 
 ## Features
 
-- **/tldr [depth]**: Summarize recent messages (depths: `recent`, `brief`, `standard`, `deep`, `max`)
-- **Optional user filtering**: Focus summaries on a specific user
-- **Smart caching**: Reuses summaries when possible
-- **Token cost tracking**: Shows OpenAI API usage per summary
-- **Admin controls**: Superuser/admin role-based access control
-- **Ephemeral replies**: Clean UI without clutter
-- **BuyMeACoffee integration**: Optional button for donations
+| Feature | Description |
+|---------|-------------|
+| **AI Summaries** | Powered by OpenAI GPT-3.5-turbo |
+| **5 Depth Levels** | From quick skim to deep dive |
+| **User Filtering** | Summarize a specific person's messages |
+| **Smart Caching** | Reuses summaries when messages haven't changed |
+| **Rate Limiting** | Built-in spam protection |
+| **Privacy First** | All responses are ephemeral (only you see them) |
+| **Cost Tracking** | See API cost per summary |
 
 ---
 
-## Setup (Developer Local Build)
+## Commands
 
-### 1. Clone and restore
+### For Everyone
+
+| Command | Description |
+|---------|-------------|
+| `/tldr depth:[level]` | Summarize recent messages |
+| `/tldr depth:[level] user:@someone` | Summarize a specific user's messages |
+| `/tldr-help` | Show available depth options |
+
+### Summary Depth Levels
+
+| Depth | Messages | Best For |
+|-------|----------|----------|
+| `recent` | ~100 | Just missed a few messages |
+| `brief` | ~200 | Missed an hour or two |
+| `standard` | ~300 | Daily catch-up (recommended) |
+| `deep` | ~400 | Missed a busy day |
+| `max` | ~500 | Deep dive (may be less focused) |
+
+### For Server Admins
+
+Admin commands use the `!admin` prefix and auto-delete after 10 seconds for privacy.
+
+| Command | Description | Who Can Use |
+|---------|-------------|-------------|
+| `!admin add-superuser @user` | Assign the server's superuser (one-time setup) | Server Owner only |
+| `!admin add @user` | Add an admin | Superuser only |
+| `!admin remove @user` | Remove an admin | Superuser only |
+| `!admin list` | List all admins | Superuser only |
+| `!admin whoami` | Check your role | Anyone |
+| `!admin refresh` | Re-sync slash commands | Admins |
+
+---
+
+## Required Permissions
+
+When inviting the bot, grant these permissions:
+
+- **Read Messages / View Channels** - To read conversation history
+- **Send Messages** - To send summaries
+- **Read Message History** - To fetch older messages
+- **Manage Messages** - To auto-delete admin commands
+- **Use Application Commands** - For slash commands
+
+---
+
+## Privacy & Data
+
+- **No message storage** - Messages are fetched on-demand, not stored
+- **Ephemeral responses** - Summaries are only visible to you
+- **No personal data collection** - We only store guild admin roles
+- **Rate limited** - Prevents abuse and controls API costs
+
+---
+
+## Self-Hosting
+
+Want to run your own instance? Here's how:
+
+### Prerequisites
+
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
+- [Discord Bot Token](https://discord.com/developers/applications)
+- [OpenAI API Key](https://platform.openai.com/api-keys)
+
+### Setup
+
 ```bash
+# Clone the repository
 git clone https://github.com/mcarthey/Discord-TLDRkseid.git
 cd Discord-TLDRkseid
+
+# Restore dependencies
 dotnet restore
+
+# Create environment file
+cp .env.example .env
+# Edit .env with your tokens
 ```
 
-### 2. Add your environment variables
+### Environment Variables
 
-Create a `.env` file (or set these via your IDE/debug config):
+Create a `.env` file in the project root:
 
+```env
+DISCORD_BOT_TOKEN=your-discord-bot-token
+OPENAI_API_KEY=your-openai-api-key
+DISCORD_DEV_GUILD_ID=optional-guild-id-for-testing
 ```
-DISCORD_BOT_TOKEN=your-bot-token-here
-OPENAI_API_KEY=your-openai-key-here
-DISCORD_DEV_GUILD_ID=your-test-guild-id (optional, for slash command testing)
-```
 
-### 3. Run the bot
+### Run
 
 ```bash
+# Development
 dotnet run
+
+# Production build
+dotnet publish -c Release -o out
+./out/DiscordPA
+```
+
+### Docker
+
+```bash
+docker build -t tldrkseid .
+docker run -d --env-file .env tldrkseid
 ```
 
 ---
 
-## Admin Setup
+## Support & Contributing
 
-Once the bot is invited and running:
+- **Issues:** [GitHub Issues](https://github.com/mcarthey/Discord-TLDRkseid/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/mcarthey/Discord-TLDRkseid/discussions)
 
-1. Use `!admin add-superuser @you` to set the first superuser (only works once)
-2. Use `!admin add @user` to assign admins
-3. Superuser/admins can run:  
-   `!admin remove @user`  
-   `!admin list`  
-   `!admin whoami`  
-   `!admin refresh` (to manually re-sync slash commands)
+PRs welcome! See [docs/Security-Performance-Audit.md](docs/Security-Performance-Audit.md) for architecture details.
 
 ---
 
-## Permissions Required
+## License
 
-When inviting the bot, ensure it has:
-
-- `Read Messages`
-- `Send Messages`
-- `Read Message History`
-- `Manage Messages` *(for auto-deleting admin commands)*
-- `Use Application Commands`
-
-You can generate a proper invite link with [Discord’s OAuth2 URL Generator](https://discord.com/developers/applications).
+MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
-## Summary Depth Levels
-
-| Depth     | Messages | Use case                            |
-|-----------|----------|-------------------------------------|
-| `recent`  | ~100     | Just missed a few posts             |
-| `brief`   | ~200     | Missed an hour or so                |
-| `standard`| ~300     | ✅ Recommended daily summary         |
-| `deep`    | ~400     | Skim a high-traffic period          |
-| `max`     | ~500     | ⚠️ Broad, may dilute the summary     |
-
----
-
-## Contributions
-
-Open to feedback, suggestions, and improvements.  
-PRs welcome—especially those that improve moderation tools or OpenAI efficiency!
+*Built with Discord.Net and OpenAI. Darkseid jokes optional but encouraged.*

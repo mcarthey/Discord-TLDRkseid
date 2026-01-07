@@ -20,14 +20,14 @@ public class Startup
     public MessageCollectorService Collector { get; private set; } = default!;
     public SummaryLogger Logger { get; private set; } = default!;
     private IServiceProvider _services = default!;
+    private ILogger<Startup>? _logger;
     private bool _eventsRegistered = false;
+    private Timer? _hourlyTimer;
+    private Timer? _dailyTimer;
 
     public async Task InitializeAsync()
     {
         NLog.LogManager.Setup().LoadConfigurationFromFile("NLog.config");
-
-        var db = new TldrDbContext();
-        db.Database.Migrate();
 
         Client = new DiscordSocketClient(new DiscordSocketConfig
         {
@@ -40,20 +40,26 @@ public class Startup
         Logger = new SummaryLogger(Collector);
 
         var openAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-        var costTracker = new CostTrackerService();
-        var aiSummarizer = new AiSummarizerService(openAiKey, costTracker);
+        if (string.IsNullOrWhiteSpace(openAiKey))
+        {
+            throw new InvalidOperationException("Missing OPENAI_API_KEY in environment variables.");
+        }
 
         _services = new ServiceCollection()
             .AddLogging(config => {
                 config.ClearProviders();
-                config.AddNLog(); // Assumes NLog.Extensions.Logging is installed
+                config.AddNLog();
             })
-            .AddSingleton(db)
+            .AddDbContextFactory<TldrDbContext>(options =>
+                options.UseSqlite("Data Source=tldr.sqlite"))
             .AddSingleton<GuildAccessService>()
             .AddSingleton(Collector)
             .AddSingleton(Logger)
-            .AddSingleton(costTracker)
-            .AddSingleton(aiSummarizer)
+            .AddSingleton<CostTrackerService>()
+            .AddSingleton(sp => new AiSummarizerService(
+                openAiKey,
+                sp.GetRequiredService<CostTrackerService>(),
+                sp.GetRequiredService<ILogger<AiSummarizerService>>()))
             .AddSingleton<SummaryCacheService>()
             .AddSingleton(Client)
             .AddSingleton(Interactions)
@@ -61,6 +67,16 @@ public class Startup
             .AddSingleton<MessageCommandHandler>()
             .AddSingleton<SpamBlockerService>()
             .BuildServiceProvider();
+
+        // Get logger instance
+        _logger = _services.GetRequiredService<ILogger<Startup>>();
+
+        // Run database migrations using the factory
+        var dbFactory = _services.GetRequiredService<IDbContextFactory<TldrDbContext>>();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            await db.Database.MigrateAsync();
+        }
 
         await Interactions.AddModulesAsync(typeof(Startup).Assembly, _services);
 
@@ -110,9 +126,14 @@ public class Startup
 
     public async Task StopAsync()
     {
+        // Dispose timers
+        _hourlyTimer?.Dispose();
+        _dailyTimer?.Dispose();
+
         // Unsubscribe events
         Client.Log -= Log;
         Client.MessageReceived -= MessageReceived;
+
         // Stop and cleanup the Discord client
         if (Client != null)
         {
@@ -120,6 +141,7 @@ public class Startup
             await Client.LogoutAsync();
             Client.Dispose();
         }
+
         if (_services is IDisposable disposableServices)
         {
             disposableServices.Dispose();
@@ -128,8 +150,8 @@ public class Startup
 
     private void StartTimers()
     {
-        var hourly = new Timer(async _ => await Logger.LogSummary("hourly"), null, GetInitialDelay(TimeSpan.FromHours(1)), TimeSpan.FromHours(1));
-        var daily = new Timer(async _ => await Logger.LogSummary("daily"), null, GetInitialDelay(TimeSpan.FromDays(1)), TimeSpan.FromDays(1));
+        _hourlyTimer = new Timer(async _ => await Logger.LogSummary("hourly"), null, GetInitialDelay(TimeSpan.FromHours(1)), TimeSpan.FromHours(1));
+        _dailyTimer = new Timer(async _ => await Logger.LogSummary("daily"), null, GetInitialDelay(TimeSpan.FromDays(1)), TimeSpan.FromDays(1));
     }
 
     private TimeSpan GetInitialDelay(TimeSpan interval)
@@ -151,7 +173,18 @@ public class Startup
 
     private Task Log(LogMessage msg)
     {
-        Console.WriteLine(msg.ToString());
+        var logLevel = msg.Severity switch
+        {
+            LogSeverity.Critical => Microsoft.Extensions.Logging.LogLevel.Critical,
+            LogSeverity.Error => Microsoft.Extensions.Logging.LogLevel.Error,
+            LogSeverity.Warning => Microsoft.Extensions.Logging.LogLevel.Warning,
+            LogSeverity.Info => Microsoft.Extensions.Logging.LogLevel.Information,
+            LogSeverity.Verbose => Microsoft.Extensions.Logging.LogLevel.Debug,
+            LogSeverity.Debug => Microsoft.Extensions.Logging.LogLevel.Trace,
+            _ => Microsoft.Extensions.Logging.LogLevel.Information
+        };
+
+        _logger?.Log(logLevel, msg.Exception, "[Discord] {Source}: {Message}", msg.Source, msg.Message);
         return Task.CompletedTask;
     }
 }

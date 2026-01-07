@@ -128,16 +128,17 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
 
             string summary;
             double cost = 0;
+            var guildIdStr = Context.Guild?.Id.ToString() ?? "dm";
             var channelIdStr = Context.Channel.Id.ToString();
             string? userIdStr = user == null ? null : user.Id.ToString();
 
             _logger.LogInformation("Command invoked: /tldr depth:{Depth} user:{User}", depth, user?.Username ?? "none");
 
-            if (_cache.TryGet(channelIdStr, depth, userIdStr, filtered, out summary, out cost))
+            if (_cache.TryGet(guildIdStr, channelIdStr, depth, userIdStr, filtered, out summary, out cost))
             {
                 _logger.LogInformation("Cache HIT for command /tldr with depth: {Depth} in channel: {ChannelId}", depth, channelIdStr);
 
-                if (_spamBlocker.IsCachedSpamming(Context.Guild?.Id.ToString() ?? "dm", channelIdStr, Context.User.Id.ToString(), out var spamReason))
+                if (_spamBlocker.IsCachedSpamming(guildIdStr, channelIdStr, Context.User.Id.ToString(), out var spamReason))
                 {
                     _logger.LogWarning("Cached spam threshold exceeded: {Reason}", spamReason);
                     await FollowupAsync(spamReason, ephemeral: true);
@@ -151,7 +152,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 var requestingUserId = Context.User.Id;
                 var isAdmin = await _access.CanAccessAdminFeaturesAsync(Context.Guild?.Id ?? 0, requestingUserId);
 
-                if (_spamBlocker.IsSpamming(Context.Guild?.Id.ToString() ?? "dm", channelIdStr, requestingUserId.ToString(), isAdmin, wasCached: false, out var spamReason))
+                if (_spamBlocker.IsSpamming(guildIdStr, channelIdStr, requestingUserId.ToString(), isAdmin, wasCached: false, out var spamReason))
                 {
                     _logger.LogWarning("Spam check triggered: {Reason}", spamReason);
                     await FollowupAsync(spamReason, ephemeral: true);
@@ -163,7 +164,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                     var (generatedSummary, generatedCost) = await _summarizer.SummarizeAsync(filtered);
                     summary = generatedSummary;
                     cost = generatedCost;
-                    _cache.Set(channelIdStr, depth, userIdStr, filtered, summary, cost);
+                    _cache.Set(guildIdStr, channelIdStr, depth, userIdStr, filtered, summary, cost);
 
                     _logger.LogInformation("Summarization succeeded with cost: {Cost:C}, summary length: {Length} characters.", cost, summary.Length);
                 }
@@ -192,7 +193,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
-    [SlashCommand("tldr-help", "List depth options for TL;DR summaries")]
+    [SlashCommand("tldr-help", "Show TLDRkseid commands and options")]
     public async Task TldrHelpAsync()
     {
         using (_logger.BeginScope(new Dictionary<string, object>
@@ -206,15 +207,30 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         }))
         {
             var embed = new EmbedBuilder()
-                .WithTitle("🧠 TL;DRkseid Summary Depths")
-                .WithDescription("Choose a depth when running `/tldr`. Each level reaches further back in the conversation.")
+                .WithTitle("🧠 TL;DRkseid Help")
+                .WithDescription("AI-powered conversation summaries for Discord.")
                 .WithColor(Color.Teal)
-                .AddField("recent", "For a quick skim of the latest chatter.")
-                .AddField("brief", "For catching up after a short break.")
-                .AddField("standard", "⚙️ Recommended for regular check-ins.")
-                .AddField("deep", "For catching up after an extended absence.")
-                .AddField("max", "⚠️ Broad and deep. May result in diluted detail.")
-                .WithFooter("Tip: Try `/tldr depth:standard` or `/tldr depth:brief user:@someone`");
+                .AddField("📋 Basic Usage",
+                    "`/tldr depth:standard` - Summarize recent messages\n" +
+                    "`/tldr depth:brief user:@someone` - Summarize one person's messages",
+                    inline: false)
+                .AddField("📊 Depth Levels",
+                    "**recent** (~100 msgs) - Quick skim\n" +
+                    "**brief** (~200 msgs) - Short break catch-up\n" +
+                    "**standard** (~300 msgs) - Daily check-in ⭐\n" +
+                    "**deep** (~400 msgs) - Extended absence\n" +
+                    "**max** (~500 msgs) - Full deep-dive ⚠️",
+                    inline: false)
+                .AddField("💡 Tips",
+                    "• Summaries are private (only you see them)\n" +
+                    "• Results are cached for 1 hour to save costs\n" +
+                    "• Rate limited to prevent spam (30s cooldown)",
+                    inline: false)
+                .AddField("🔧 Admin Commands",
+                    "Server admins can use `!admin` commands.\n" +
+                    "Type `!admin` in chat to see options.",
+                    inline: false)
+                .WithFooter("TLDRkseid • github.com/mcarthey/Discord-TLDRkseid");
 
             _logger.LogInformation("Providing tldr-help response.");
             await RespondAsync(embed: embed.Build(), ephemeral: true);
