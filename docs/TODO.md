@@ -24,11 +24,11 @@ Project roadmap and pending tasks.
 ## High Priority - Before Public Release
 
 ### UX Improvements
-- [ ] Add "thinking..." indicator during summarization
-- [ ] Better error messages with specific missing permissions
-- [ ] Consistent rate limit messages (explain cooldown vs burst)
-- [ ] Visual distinction for cached vs fresh summaries (different embed colors)
-- [ ] Show cache hit/miss status to users
+- [x] Add "thinking..." indicator during summarization (always DeferAsync first)
+- [x] Better error messages with specific missing permissions (lists each missing permission)
+- [x] Consistent rate limit messages (explain cooldown vs burst with clear formatting)
+- [x] Visual distinction for cached vs fresh summaries (Green=cached, Purple=fresh, Orange=truncated)
+- [x] Show cache hit/miss status to users (footer shows "⚡ Cached" or "🆕 Fresh")
 
 ### Missing Core Features
 - [ ] **Use GuildSettings** - `PreferredSummaryDepth` and `AutoSummarizeEnabled` exist but are never used
@@ -126,6 +126,13 @@ Project roadmap and pending tasks.
 - [x] Validate AI response length before creating embed (truncates at 4096 chars with notice)
 - [x] Better error categorization for OpenAI failures (401, 429, 500, 503 with user-friendly messages)
 
+### UX Improvements (January 2026)
+- [x] Add "thinking..." indicator - Always call DeferAsync first to show Discord's loading state
+- [x] Better permission error messages - Lists specific missing permissions (View Channel, Read History, Send Messages)
+- [x] Consistent rate limit messages - Clear formatting with **Cooldown** vs **Burst limit** labels
+- [x] Visual distinction for cached vs fresh summaries - Color coding (Green/Purple/Orange/Red)
+- [x] Show cache hit/miss status - Footer displays "⚡ Cached (instant & free)" or "🆕 Fresh summary"
+
 ### Security & Performance Audit (January 2026)
 - [x] Fix superuser privilege escalation (require guild owner)
 - [x] Fix DbContext singleton (use factory pattern)
@@ -154,7 +161,7 @@ Project roadmap and pending tasks.
 |----------|-------|----------|
 | Critical Bugs | 0 | ~~**FIX NOW**~~ ✅ |
 | Error Handling | 0 | ~~High~~ ✅ |
-| UX Improvements | 5 | High |
+| UX Improvements | 0 | ~~High~~ ✅ |
 | Missing Core Features | 4 | High |
 | Security | 4 | High |
 | Feature Enhancements | 5 | Medium |

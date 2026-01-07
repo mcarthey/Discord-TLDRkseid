@@ -44,7 +44,7 @@ public class SpamBlockerService : IDisposable
         if (_lastCachedReplyMap.TryGetValue(key, out var last) && (now - last) < TimeSpan.FromSeconds(10))
         {
             var retry = 10 - (now - last).TotalSeconds;
-            reason = $"🕓 You're requesting cached summaries too fast. Try again in {retry:F0}s.";
+            reason = $"🕓 **Cooldown active** - Cached summaries have a 10s cooldown. Try again in {retry:F0}s.";
             return true;
         }
 
@@ -62,18 +62,18 @@ public class SpamBlockerService : IDisposable
 
         var now = DateTime.UtcNow;
 
-        // Cooldown check
+        // Cooldown check - minimum time between requests
         if (_lastRequestMap.TryGetValue(key, out var lastTime) &&
             (now - lastTime) < _cooldownDuration)
         {
             var remaining = (_cooldownDuration - (now - lastTime)).TotalSeconds;
-            reason = $"⏳ Slow down! Try again in {remaining:F0}s.";
+            reason = $"⏳ **Cooldown active** - Fresh summaries require a {_cooldownDuration.TotalSeconds:F0}s cooldown between requests. Try again in {remaining:F0}s.";
             return true;
         }
 
         _lastRequestMap[key] = now;
 
-        // Burst detection
+        // Burst detection - too many requests in short window
         var queue = _recentRequestsMap.GetOrAdd(key, _ => new Queue<DateTime>());
         lock (queue)
         {
@@ -83,7 +83,7 @@ public class SpamBlockerService : IDisposable
 
             if (queue.Count >= _burstThreshold)
             {
-                reason = "⚠️ Whoa there! You're sending requests too quickly.";
+                reason = $"⚠️ **Burst limit reached** - You've made {_burstThreshold} requests in {_burstWindow.TotalSeconds:F0}s. Please wait a moment before trying again.";
                 return true;
             }
         }
@@ -97,18 +97,18 @@ public class SpamBlockerService : IDisposable
         var key = $"admin-{guildId}-{userId}";
         var now = DateTime.UtcNow;
 
-        // Cooldown check
+        // Cooldown check - minimum time between admin commands
         if (_lastAdminCommandMap.TryGetValue(key, out var lastTime) &&
             (now - lastTime) < _adminCooldown)
         {
             var remaining = (_adminCooldown - (now - lastTime)).TotalSeconds;
-            reason = $"⏳ Please wait {remaining:F0}s before using another admin command.";
+            reason = $"⏳ **Cooldown active** - Admin commands have a {_adminCooldown.TotalSeconds:F0}s cooldown. Try again in {remaining:F0}s.";
             return true;
         }
 
         _lastAdminCommandMap[key] = now;
 
-        // Burst detection
+        // Burst detection - too many admin commands in short window
         var queue = _adminBurstMap.GetOrAdd(key, _ => new Queue<DateTime>());
         lock (queue)
         {
@@ -118,7 +118,7 @@ public class SpamBlockerService : IDisposable
 
             if (queue.Count > _adminBurstThreshold)
             {
-                reason = "⚠️ Too many admin commands. Please slow down.";
+                reason = $"⚠️ **Burst limit reached** - You've run {_adminBurstThreshold} admin commands in {_adminBurstWindow.TotalSeconds:F0}s. Please wait before trying again.";
                 return true;
             }
         }

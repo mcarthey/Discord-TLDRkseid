@@ -91,21 +91,26 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
             }
 
             var permissions = botUser.GetPermissions(textChannel);
-            if (!permissions.SendMessages || !permissions.ViewChannel)
+            var missingPerms = new List<string>();
+            if (!permissions.ViewChannel) missingPerms.Add("View Channel");
+            if (!permissions.ReadMessageHistory) missingPerms.Add("Read Message History");
+            if (!permissions.SendMessages) missingPerms.Add("Send Messages");
+
+            if (missingPerms.Count > 0)
             {
-                _logger.LogWarning("Insufficient bot permissions in channel {ChannelName}.", textChannel.Name);
-                await RespondAsync("🚫 I don’t have permission to post summaries in this channel.", ephemeral: true);
+                _logger.LogWarning("Insufficient bot permissions in channel {ChannelName}: {MissingPerms}",
+                    textChannel.Name, string.Join(", ", missingPerms));
+                await RespondAsync($"🚫 I'm missing these permissions in this channel:\n• {string.Join("\n• ", missingPerms)}\n\nPlease ask a server admin to grant these permissions.", ephemeral: true);
                 return;
             }
 
-            // Inform user about potential issues with "max" depth
+            // Always defer first to show "thinking..." indicator
+            await DeferAsync(ephemeral: true);
+
+            // Warn about potential issues with "max" depth
             if (depth == "max")
             {
-                await RespondAsync("⚠️ `max` depth may result in slower or overly broad summaries. Use `/tldr help` for more focused tiers.", ephemeral: true);
-            }
-            else
-            {
-                await DeferAsync(ephemeral: true);
+                await FollowupAsync("⚠️ `max` depth may result in slower or overly broad summaries. Use `/tldr-help` for more focused tiers.", ephemeral: true);
             }
 
             _logger.LogInformation("Fetching up to {MessageLimit} messages for depth {Depth}.", messageLimit, depth);
@@ -139,6 +144,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
 
             string summary;
             double cost = 0;
+            bool wasCached = false;
             var guildIdStr = Context.Guild?.Id.ToString() ?? "dm";
             var channelIdStr = Context.Channel.Id.ToString();
             string? userIdStr = user == null ? null : user.Id.ToString();
@@ -147,6 +153,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
 
             if (_cache.TryGet(guildIdStr, channelIdStr, depth, userIdStr, filtered, out summary, out cost))
             {
+                wasCached = true;
                 _logger.LogInformation("Cache HIT for command /tldr with depth: {Depth} in channel: {ChannelId}", depth, channelIdStr);
 
                 if (_spamBlocker.IsCachedSpamming(guildIdStr, channelIdStr, Context.User.Id.ToString(), out var spamReason))
@@ -198,13 +205,24 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 wasTruncated = true;
             }
 
-            var footerText = $"{(user != null ? $"Filtered by: {user.Username}" : "All users")} • " +
-                             $"This summary cost: ${cost:F4} • Total spent: ${_costTracker.GetTotal():F2} • ☕";
+            // Build cache status indicator
+            var cacheStatus = wasCached ? "⚡ Cached (instant & free)" : "🆕 Fresh summary";
+
+            var footerText = $"{cacheStatus} • {(user != null ? $"Filtered: {user.Username}" : "All users")} • " +
+                             $"Cost: ${cost:F4} • Total: ${_costTracker.GetTotal():F2}";
+
+            // Color coding: Green=cached, Purple=fresh, Orange=truncated, DarkRed=max depth
+            var embedColor = wasTruncated ? Color.Orange
+                           : wasCached ? Color.Green
+                           : depth == "max" ? Color.DarkRed
+                           : Color.DarkPurple;
+
+            var titleSuffix = wasTruncated ? " (Truncated)" : wasCached ? " ⚡" : "";
 
             var embed = new EmbedBuilder()
-                .WithTitle($"TL;DRkseid Summary – {depth.ToUpper()}{(wasTruncated ? " (Truncated)" : "")}")
+                .WithTitle($"TL;DRkseid Summary – {depth.ToUpper()}{titleSuffix}")
                 .WithDescription(displaySummary)
-                .WithColor(wasTruncated ? Color.Orange : (depth == "max" ? Color.DarkRed : Color.DarkPurple))
+                .WithColor(embedColor)
                 .WithFooter(new EmbedFooterBuilder { Text = footerText });
 
             var builder = new ComponentBuilder()
