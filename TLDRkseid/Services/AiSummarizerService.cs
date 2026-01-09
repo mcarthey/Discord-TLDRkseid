@@ -18,9 +18,9 @@ public class AiSummarizerService
     // Timeout for OpenAI API calls (Discord deferred responses allow up to 15 min, but we want reasonable UX)
     private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(30);
 
-    public AiSummarizerService(string apiKey, CostTrackerService costTracker, ILogger<AiSummarizerService> logger)
+    public AiSummarizerService(IOpenAIService openAiService, CostTrackerService costTracker, ILogger<AiSummarizerService> logger)
     {
-        _service = new OpenAIService(new OpenAiOptions { ApiKey = apiKey });
+        _service = openAiService;
         _costTracker = costTracker;
         _logger = logger;
     }

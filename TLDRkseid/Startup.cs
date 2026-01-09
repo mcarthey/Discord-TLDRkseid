@@ -12,6 +12,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NLog;
 using NLog.Extensions.Logging;
+using OpenAI;
+using OpenAI.Interfaces;
+using OpenAI.Managers;
 
 namespace TLDRkseid;
 
@@ -87,10 +90,8 @@ public class Startup
             .AddSingleton(Collector)
             .AddSingleton(Logger)
             .AddSingleton<CostTrackerService>()
-            .AddSingleton(sp => new AiSummarizerService(
-                openAiKey,
-                sp.GetRequiredService<CostTrackerService>(),
-                sp.GetRequiredService<ILogger<AiSummarizerService>>()))
+            .AddSingleton<IOpenAIService>(new OpenAIService(new OpenAiOptions { ApiKey = openAiKey }))
+            .AddSingleton<AiSummarizerService>()
             .AddSingleton<SummaryCacheService>()
             .AddSingleton(Client)
             .AddSingleton(Interactions)
