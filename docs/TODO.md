@@ -89,13 +89,22 @@ Project roadmap and pending tasks.
 - [ ] Discoverable superuser setup (help message when permission denied)
 
 ### Technical Debt
-- [x] Add unit tests - 93 tests across 7 test classes (AiSummarizer, Cache, CostTracker, GuildAccess, GuildSettings, SpamBlocker, MessageFiltering)
-- [ ] Add integration tests
+- [x] Add unit tests - 84 tests across 7 test classes (AiSummarizer, Cache, CostTracker, GuildAccess, GuildSettings, SpamBlocker, MessageFiltering)
+- [ ] **Add TldrModule tests** - CRITICAL: Main command handler has 0 tests (~50 needed)
+- [ ] **Add MessageCollectorService tests** - HIGH: Completely untested (~20 needed)
+- [ ] **Add database failure tests** - MEDIUM: No EF Core exception handling tests (~25 needed)
+- [ ] Add integration tests - Full workflow tests (~30 needed)
 - [x] Set up CI/CD pipeline - GitHub Actions workflow in `.github/workflows/ci.yml`
 - [x] Set up code coverage reporting - Codecov integration configured
 - [ ] Database migration to PostgreSQL for scale
 - [ ] Redis caching for distributed deployments
 - [ ] Encrypted database storage
+
+### Test Coverage Gaps (See RELEASE-READINESS-REPORT.md for details)
+- [ ] TldrModule: Command invocation, message fetching, timeout handling, permission checks
+- [ ] MessageCollectorService: Null author handling, thread safety, cleanup behavior
+- [ ] AiSummarizerService: Timeout enforcement, debounce verification
+- [ ] Database: Connection failures, transaction rollbacks, concurrent access
 
 ---
 
@@ -190,7 +199,7 @@ Without a volume, your database is lost on each redeploy!
 ### Legal & Compliance
 
 - [x] **Create Privacy Policy** - `PRIVACY.md` created with GDPR compliance ✅
-- [ ] **Create Terms of Service** - Usage terms for the bot
+- [ ] **🚨 Create Terms of Service** - BLOCKER: Required for bot listing sites (top.gg, discord.bots.gg)
 - [ ] **Add data retention policy** - How long messages/logs are kept (documented in PRIVACY.md)
 - [x] **GDPR considerations** - Covered in `PRIVACY.md` ✅
 - [x] **OpenAI usage disclosure** - Covered in `PRIVACY.md` ✅
@@ -207,9 +216,10 @@ Without a volume, your database is lost on each redeploy!
 
 - [x] **Add LICENSE file** - Apache 2.0 license added ✅
 - [ ] **Create CONTRIBUTING.md** - Guidelines for contributors
-- [ ] **Add bot invite link to README** - OAuth2 URL with correct permissions
+- [ ] **🚨 Add bot invite link to README** - BLOCKER: OAuth2 URL with correct permissions (View Channels, Send Messages, Read Message History, Embed Links)
+- [ ] **🚨 Configure OpenAI cost alerts** - BLOCKER: Set hard limit and email alerts in OpenAI dashboard
 - [ ] **Create landing page** (optional) - Simple site explaining the bot
-- [ ] **Submit to bot listing sites** - top.gg, discord.bots.gg, discordbotlist.com
+- [ ] **Submit to bot listing sites** - top.gg, discord.bots.gg, discordbotlist.com (requires ToS)
 - [ ] **Create support server** (optional) - Discord server for bot support
 
 ### Post-Deployment
