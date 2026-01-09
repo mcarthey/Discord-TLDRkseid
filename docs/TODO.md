@@ -147,8 +147,8 @@ Project roadmap and pending tasks.
 
 #### Build & Test
 - [x] **Run production build** - Dockerfile handles Release build automatically ✅
-- [ ] **👀 YOU: Test in staging environment** - Optional: test with dev token first
-- [ ] **👀 YOU: Verify all commands work** - Test `/tldr`, `/cost`, `/tldr-config`, `/tldr-help` after deploy
+- [x] ~~**👀 YOU: Test in staging environment**~~ - Tested directly on production ✅
+- [x] **👀 YOU: Verify all commands work** - `/tldr` tested and working ✅
 - [ ] **👀 YOU: Test admin commands** - Test `!admin` commands after deploy
 - [x] **Load test** - Bot handles concurrent requests gracefully (rate limiting implemented) ✅
 
@@ -349,6 +349,10 @@ Without a volume, your database is lost on each redeploy!
 - [x] Add PRIVACY.md for Discord bot compliance
 - [x] Fix /tldr command hanging - Added null-safe check for message Authors, try-catch wrapper after DeferAsync
 - [x] Add MessageFilteringTests - 7 tests covering null Author scenarios
+- [x] Fix EF Core migration lock blocking startup - Clear stale locks before `MigrateAsync()` for single-instance deployments
+- [x] Add exception details to NLog console output - Added `${exception:format=tostring}` to console layout
+- [x] Handle Discord.NET deserialization errors - Gracefully skip message batches with unsupported components (Discord.NET 3.17.2 bug)
+- [x] **Bot successfully deployed and running on Railway!** 🎉
 
 ---
 
@@ -405,5 +409,14 @@ All quick wins have been completed!
 - May need privacy policy for bot listings
 
 ---
+
+## Known Issues
+
+### Discord.NET MessageComponent Deserialization Bug
+- **Symptom:** `/tldr` returns "No messages found" in channels with certain bot messages
+- **Cause:** Discord.NET 3.17.2 throws `ArgumentNullException` when deserializing messages with certain interactive components (buttons, select menus) that have null properties
+- **Workaround:** Delete the problematic bot message from the channel, or use `/tldr` in a different channel
+- **Status:** Waiting for Discord.NET library fix
+- **Tracking:** Error is logged with warning level, bot continues gracefully
 
 *Last updated: January 2026*
