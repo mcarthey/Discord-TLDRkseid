@@ -146,6 +146,8 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
             // Always defer first to show "thinking..." indicator
             await DeferAsync(ephemeral: true);
 
+            try
+            {
             // Warn about potential issues with "max" depth
             if (effectiveDepth == "max")
             {
@@ -155,9 +157,10 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
             _logger.LogInformation("Fetching up to {MessageLimit} messages for depth {Depth}.", messageLimit, effectiveDepth);
 
             var messages = await FetchRecentMessages(messageChannel!, messageLimit);
+            _logger.LogInformation("Fetched {MessageCount} messages from channel.", messages.Count);
 
             var filtered = messages
-                .Where(m => !m.Author.IsBot)
+                .Where(m => m.Author != null && !m.Author.IsBot)
                 .Where(m => user == null || m.Author.Id == user.Id)
                 .OrderBy(m => m.Timestamp)
                 .Select(m => $"{m.Author.Username}: {m.Content}")
@@ -270,6 +273,12 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
 
             _logger.LogInformation("Sending summary response to user.");
             await FollowupAsync(embed: embed.Build(), components: builder.Build(), ephemeral: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error during /tldr command execution");
+                await FollowupAsync("❌ An unexpected error occurred while generating the summary. Please try again.", ephemeral: true);
+            }
         }
     }
 
