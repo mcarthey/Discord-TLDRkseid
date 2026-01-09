@@ -493,6 +493,19 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 await Task.Delay(delay, ct);
                 delay *= 2; // Exponential backoff
             }
+            catch (ArgumentNullException ex)
+            {
+                // Discord.NET bug: some messages with components fail to deserialize
+                // Log and continue with empty batch rather than crashing
+                _logger.LogWarning(ex, "Discord.NET deserialization error fetching messages (likely a message with unsupported components). Skipping batch.");
+                return Enumerable.Empty<IMessage>();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Catch other unexpected errors during message fetch
+                _logger.LogWarning(ex, "Unexpected error fetching messages. Skipping batch.");
+                return Enumerable.Empty<IMessage>();
+            }
         }
 
         return Enumerable.Empty<IMessage>();
