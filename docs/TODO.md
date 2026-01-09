@@ -89,9 +89,10 @@ Project roadmap and pending tasks.
 - [ ] Discoverable superuser setup (help message when permission denied)
 
 ### Technical Debt
-- [ ] Add unit tests
+- [x] Add unit tests - Basic test project created with xUnit
 - [ ] Add integration tests
-- [ ] Set up CI/CD pipeline
+- [x] Set up CI/CD pipeline - GitHub Actions workflow in `.github/workflows/ci.yml`
+- [x] Set up code coverage reporting - Codecov integration configured
 - [ ] Database migration to PostgreSQL for scale
 - [ ] Redis caching for distributed deployments
 - [ ] Encrypted database storage
@@ -125,6 +126,7 @@ Project roadmap and pending tasks.
 #### Security & Secrets
 - [ ] **🔑 YOU: Generate production bot token** - Go to [Discord Developer Portal](https://discord.com/developers/applications), create/copy token
 - [ ] **🔑 YOU: Get OpenAI API key** - Go to [OpenAI Platform](https://platform.openai.com/api-keys), copy your key
+- [ ] **🔑 YOU: Add CODECOV_TOKEN** - Go to GitHub repo Settings → Secrets → Actions, add token from [Codecov](https://app.codecov.io)
 - [x] **Verify .gitignore** - `.env`, `tldr.sqlite`, `logs/` all excluded ✅
 - [x] **Review bot permissions** - Only needs: Send Messages, Read Message History, View Channel ✅
 - [x] **Set up secrets management** - Railway dashboard handles this automatically ✅
@@ -323,6 +325,12 @@ Project roadmap and pending tasks.
 - [x] Remove total_cost.json dependency - All cost data now in SQLite database
 - [x] Add per-guild usage statistics - `GetGuildStatsAsync()`, `GetGlobalStatsAsync()` methods
 
+### CI/CD & Quality (January 2026)
+- [x] Set up GitHub Actions CI pipeline - `.github/workflows/ci.yml` with build, test, and Docker build
+- [x] Configure Codecov for code coverage - `codecov.yml` with project/patch status checks
+- [x] Add test results reporting - dorny/test-reporter for PR test results
+- [x] Configure coverage upload - codecov-action@v5 with XPlat Code Coverage
+
 ---
 
 ## Issue Summary
@@ -341,7 +349,7 @@ Project roadmap and pending tasks.
 | Observability | 4 | Medium |
 | Competitive Features | 6 | Low |
 | Polish | 4 | Low |
-| Technical Debt | 6 | Low |
+| Technical Debt | 3 | Low |
 
 ---
 
