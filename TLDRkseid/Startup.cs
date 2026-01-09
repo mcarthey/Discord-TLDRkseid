@@ -107,6 +107,19 @@ public class Startup
         var dbFactory = _services.GetRequiredService<IDbContextFactory<TldrDbContext>>();
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
+            // Clear any stale migration locks from previous crashed deployments
+            // This is safe for single-instance deployments (like Railway)
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    "DELETE FROM \"__EFMigrationsLock\" WHERE 1=1");
+                _logger?.LogInformation("Cleared stale migration locks");
+            }
+            catch
+            {
+                // Table might not exist yet on first run - that's fine
+            }
+
             await db.Database.MigrateAsync();
         }
 
