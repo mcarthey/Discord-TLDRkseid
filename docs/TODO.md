@@ -66,7 +66,7 @@ Project roadmap and pending tasks.
 
 ### Observability
 - [ ] Add metrics/Prometheus export
-- [ ] Health check endpoint for monitoring
+- [x] Health check endpoint for monitoring - `/health`, `/health/live`, `/health/ready` endpoints added
 - [ ] Performance timing on key operations
 - [ ] Log rotation for database logs
 
@@ -89,7 +89,7 @@ Project roadmap and pending tasks.
 - [ ] Discoverable superuser setup (help message when permission denied)
 
 ### Technical Debt
-- [x] Add unit tests - Basic test project created with xUnit
+- [x] Add unit tests - 93 tests across 7 test classes (AiSummarizer, Cache, CostTracker, GuildAccess, GuildSettings, SpamBlocker, MessageFiltering)
 - [ ] Add integration tests
 - [x] Set up CI/CD pipeline - GitHub Actions workflow in `.github/workflows/ci.yml`
 - [x] Set up code coverage reporting - Codecov integration configured
@@ -133,8 +133,8 @@ Project roadmap and pending tasks.
 
 #### Environment Configuration
 - [x] ~~**Create production .env**~~ - Not needed for Railway (use dashboard instead) ✅
-- [ ] **🔑 YOU: Set DISCORD_BOT_TOKEN** - Add in Railway dashboard after connecting repo
-- [ ] **🔑 YOU: Set OPENAI_API_KEY** - Add in Railway dashboard after connecting repo
+- [x] **🔑 YOU: Set DISCORD_BOT_TOKEN** - Added in Railway dashboard ✅
+- [x] **🔑 YOU: Set OPENAI_API_KEY** - Added in Railway dashboard ✅
 - [x] **Set DATABASE_PATH** (optional) - Default `tldr.sqlite` works, configurable if needed ✅
 - [x] **Remove DISCORD_DEV_GUILD_ID** - Not setting it = commands register globally ✅
 - [x] **Configure rate limits** - Configured in `appsettings.json` ✅
@@ -341,6 +341,15 @@ Without a volume, your database is lost on each redeploy!
 - [x] Add test results reporting - dorny/test-reporter for PR test results
 - [x] Configure coverage upload - codecov-action@v5 with XPlat Code Coverage
 
+### Deployment & Bug Fixes (January 2026)
+- [x] Fix Dockerfile VOLUME directive - Railway doesn't support Docker VOLUME, removed it
+- [x] Fix NLog crash on startup - Added `install-command` to auto-create LogEntries table, set `throwExceptions="false"`
+- [x] Add HTTP health check endpoints - `/health`, `/health/live`, `/health/ready` with ASP.NET Core
+- [x] Add Apache 2.0 LICENSE file
+- [x] Add PRIVACY.md for Discord bot compliance
+- [x] Fix /tldr command hanging - Added null-safe check for message Authors, try-catch wrapper after DeferAsync
+- [x] Add MessageFilteringTests - 7 tests covering null Author scenarios
+
 ---
 
 ## Issue Summary
@@ -352,14 +361,14 @@ Without a volume, your database is lost on each redeploy!
 | UX Improvements | 0 | ~~High~~ ✅ |
 | Missing Core Features | 0 | ~~High~~ ✅ |
 | Security | 0 | ~~High~~ ✅ |
-| **Deployment** | **~40** | **High - Before Launch** |
+| **Deployment** | **~35** | **High - Before Launch** |
 | Feature Enhancements | 5 | Medium |
 | Performance | 2 | Medium |
 | Admin Features | 4 | Medium |
-| Observability | 4 | Medium |
+| Observability | 3 | Medium |
 | Competitive Features | 6 | Low |
 | Polish | 4 | Low |
-| Technical Debt | 3 | Low |
+| Technical Debt | 2 | Low |
 
 ---
 
