@@ -124,9 +124,9 @@ Project roadmap and pending tasks.
 ### Pre-Deployment Checklist (REQUIRED)
 
 #### Security & Secrets
-- [ ] **🔑 YOU: Generate production bot token** - Go to [Discord Developer Portal](https://discord.com/developers/applications), create/copy token
-- [ ] **🔑 YOU: Get OpenAI API key** - Go to [OpenAI Platform](https://platform.openai.com/api-keys), copy your key
-- [ ] **🔑 YOU: Add CODECOV_TOKEN** - Go to GitHub repo Settings → Secrets → Actions, add token from [Codecov](https://app.codecov.io)
+- [x] **🔑 YOU: Generate production bot token** - Go to [Discord Developer Portal](https://discord.com/developers/applications), create/copy token ✅
+- [x] **🔑 YOU: Get OpenAI API key** - Go to [OpenAI Platform](https://platform.openai.com/api-keys), copy your key ✅
+- [x] **🔑 YOU: Add CODECOV_TOKEN** - Go to GitHub repo Settings → Secrets → Actions, add token from [Codecov](https://app.codecov.io) ✅
 - [x] **Verify .gitignore** - `.env`, `tldr.sqlite`, `logs/` all excluded ✅
 - [x] **Review bot permissions** - Only needs: Send Messages, Read Message History, View Channel ✅
 - [x] **Set up secrets management** - Railway dashboard handles this automatically ✅
@@ -157,33 +157,43 @@ Project roadmap and pending tasks.
 - [x] **Create Dockerfile** - Multi-stage .NET 10 build for smaller image ✅
 - [x] ~~**Create docker-compose.yml**~~ - Not needed for Railway deployment ✅
 - [x] **Configure persistent volumes** - Railway handles storage automatically ✅
-- [ ] **Set up health checks** - Optional enhancement for later
+- [x] **Set up health checks** - HTTP endpoints at `/health`, `/health/live`, `/health/ready` ✅
 - [x] **Configure restart policy** - Railway handles restarts automatically ✅
 
 ### Hosting Platform Setup
 
 - [x] **Choose hosting platform** - Railway.app selected ✅
 - [x] **Configure compute resources** - Railway auto-scales, 512MB+ available ✅
-- [x] **Set up persistent storage** - Railway handles SQLite persistence ✅
-- [ ] **🔑 YOU: Configure environment variables** - Add `DISCORD_BOT_TOKEN` and `OPENAI_API_KEY` in Railway dashboard
+- [ ] **🔑 YOU: Set up Railway Volume** - CRITICAL for data persistence (see instructions below)
+- [x] **🔑 YOU: Configure environment variables** - `DISCORD_BOT_TOKEN` and `OPENAI_API_KEY` added ✅
 - [x] **Set up deployment pipeline** - Railway auto-deploys from GitHub on push ✅
 - [ ] **Configure domain/subdomain** (optional) - Not needed for Discord bot
 
+#### Railway Volume Setup (REQUIRED)
+Without a volume, your database is lost on each redeploy!
+
+1. In Railway Dashboard, click your service
+2. Go to **Settings** → **Volumes**
+3. Click **Add Volume**, set mount path: `/data`
+4. Go to **Variables**, add: `DATABASE_PATH=/data/tldr.sqlite`
+5. Redeploy
+
 ### Monitoring & Reliability
 
-- [ ] **Set up uptime monitoring** - UptimeRobot, Healthchecks.io, or similar
+- [x] **Set up health check endpoints** - `/health`, `/health/live`, `/health/ready` ✅
+- [ ] **Set up uptime monitoring** - Point UptimeRobot or BetterStack at `https://your-app.railway.app/health`
 - [ ] **Configure alerting** - Notify on bot downtime or errors
-- [ ] **Set up log aggregation** - Review logs for errors and issues
+- [ ] **Set up log aggregation** - Review logs for errors and issues (Railway has built-in logs)
 - [ ] **Monitor API costs** - Set up OpenAI usage alerts/limits
 - [ ] **Discord status monitoring** - Check bot appears online
 
 ### Legal & Compliance
 
-- [ ] **Create Privacy Policy** - Required for bot listings; explain data handling
+- [x] **Create Privacy Policy** - `PRIVACY.md` created with GDPR compliance ✅
 - [ ] **Create Terms of Service** - Usage terms for the bot
-- [ ] **Add data retention policy** - How long messages/logs are kept
-- [ ] **GDPR considerations** - If serving EU users, ensure compliance
-- [ ] **OpenAI usage disclosure** - Inform users messages are sent to OpenAI
+- [ ] **Add data retention policy** - How long messages/logs are kept (documented in PRIVACY.md)
+- [x] **GDPR considerations** - Covered in `PRIVACY.md` ✅
+- [x] **OpenAI usage disclosure** - Covered in `PRIVACY.md` ✅
 
 ### Discord Bot Verification (If 100+ Servers)
 
@@ -195,7 +205,7 @@ Project roadmap and pending tasks.
 
 ### Public Release
 
-- [ ] **Add LICENSE file** - MIT, Apache 2.0, or other appropriate license
+- [x] **Add LICENSE file** - Apache 2.0 license added ✅
 - [ ] **Create CONTRIBUTING.md** - Guidelines for contributors
 - [ ] **Add bot invite link to README** - OAuth2 URL with correct permissions
 - [ ] **Create landing page** (optional) - Simple site explaining the bot

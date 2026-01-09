@@ -20,9 +20,12 @@ RUN dotnet test --no-restore --verbosity normal
 # Publish the main project
 RUN dotnet publish TLDRkseid/TLDRkseid.csproj -c Release -o out --no-restore
 
-# Stage 2: Runtime
-FROM mcr.microsoft.com/dotnet/runtime:10.0
+# Stage 2: Runtime (using aspnet for health check web server)
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app/out .
+
+# Expose health check port (Railway will set PORT env var)
+EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "TLDRkseid.dll"]
