@@ -25,7 +25,4 @@ FROM mcr.microsoft.com/dotnet/runtime:10.0
 WORKDIR /app
 COPY --from=build /app/out .
 
-# Create volume mount point for persistent data
-VOLUME ["/data"]
-
 ENTRYPOINT ["dotnet", "TLDRkseid.dll"]
