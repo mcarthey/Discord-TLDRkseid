@@ -199,7 +199,7 @@ Without a volume, your database is lost on each redeploy!
 ### Legal & Compliance
 
 - [x] **Create Privacy Policy** - `PRIVACY.md` created with GDPR compliance ✅
-- [ ] **🚨 Create Terms of Service** - BLOCKER: Required for bot listing sites (top.gg, discord.bots.gg)
+- [x] **Create Terms of Service** - `TERMS-OF-SERVICE.md` created ✅
 - [ ] **Add data retention policy** - How long messages/logs are kept (documented in PRIVACY.md)
 - [x] **GDPR considerations** - Covered in `PRIVACY.md` ✅
 - [x] **OpenAI usage disclosure** - Covered in `PRIVACY.md` ✅
@@ -208,15 +208,15 @@ Without a volume, your database is lost on each redeploy!
 
 - [ ] **Prepare verification application** - Required when bot joins 75+ servers
 - [ ] **Document bot functionality** - Clear description of what bot does
-- [ ] **Privacy policy URL** - Required for verification
-- [ ] **Terms of service URL** - Required for verification
+- [x] **Privacy policy URL** - `PRIVACY.md` created ✅
+- [x] **Terms of service URL** - `TERMS-OF-SERVICE.md` created ✅
 - [ ] **Privileged intents justification** - Explain why Message Content intent is needed
 
 ### Public Release
 
 - [x] **Add LICENSE file** - Apache 2.0 license added ✅
 - [ ] **Create CONTRIBUTING.md** - Guidelines for contributors
-- [ ] **🚨 Add bot invite link to README** - BLOCKER: OAuth2 URL with correct permissions (View Channels, Send Messages, Read Message History, Embed Links)
+- [x] **Add bot invite link to README** - OAuth2 URL added with correct permissions ✅
 - [ ] **🚨 Configure OpenAI cost alerts** - BLOCKER: Set hard limit and email alerts in OpenAI dashboard
 - [ ] **Create landing page** (optional) - Simple site explaining the bot
 - [ ] **Submit to bot listing sites** - top.gg, discord.bots.gg, discordbotlist.com (requires ToS)
