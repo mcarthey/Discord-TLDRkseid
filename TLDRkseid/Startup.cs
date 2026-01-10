@@ -56,15 +56,19 @@ public class Startup
 
         Client = new DiscordSocketClient(new DiscordSocketConfig
         {
-            // Explicitly specify intents instead of AllUnprivileged to ensure GuildMessages is included
+            // Explicitly specify intents - GuildMembers is enabled in portal so include it
             GatewayIntents = GatewayIntents.Guilds
+                | GatewayIntents.GuildMembers  // Privileged - enabled in Discord portal
                 | GatewayIntents.GuildMessages
                 | GatewayIntents.GuildMessageReactions
                 | GatewayIntents.DirectMessages
                 | GatewayIntents.DirectMessageReactions
-                | GatewayIntents.MessageContent,
+                | GatewayIntents.MessageContent,  // Privileged - enabled in Discord portal
             // Log gateway intent issues
-            LogGatewayIntentWarnings = true
+            LogGatewayIntentWarnings = true,
+            // Ensure we receive all messages
+            MessageCacheSize = 100,
+            LogLevel = LogSeverity.Debug
         });
 
         Interactions = new InteractionService(Client.Rest);
@@ -151,17 +155,24 @@ public class Startup
 
             Client.Ready += async () =>
             {
+                var logger = _services.GetRequiredService<ILogger<Startup>>();
+
+                // Log the actual intents the client is using
+                var config = Client.CurrentUser != null ? "Connected" : "Not connected";
+                logger.LogInformation("🔧 Gateway Intents requested: {Intents} (value: {IntentValue})",
+                    Client.CurrentUser != null ? "Ready" : "Unknown",
+                    (int)(GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.GuildMessageReactions
+                        | GatewayIntents.DirectMessages | GatewayIntents.DirectMessageReactions | GatewayIntents.MessageContent));
+
                 var devGuildId = Environment.GetEnvironmentVariable("DISCORD_DEV_GUILD_ID");
                 if (ulong.TryParse(devGuildId, out var guildId))
                 {
                     await Interactions.RegisterCommandsToGuildAsync(guildId, true);
-                    var logger = _services.GetRequiredService<ILogger<Startup>>();
                     logger.LogInformation("✅ TLDrkseid slash commands registered to dev guild: {GuildId}", guildId);
                 }
                 else
                 {
                     await Interactions.RegisterCommandsGloballyAsync(true);
-                    var logger = _services.GetRequiredService<ILogger<Startup>>();
                     logger.LogInformation("✅ TLDrkseid slash commands registered globally.");
                 }
             };
