@@ -216,6 +216,13 @@ public class Startup
 
     private async Task MessageReceived(SocketMessage message)
     {
+        // Debug: Log every message received to diagnose MessageContent intent issues (temporary - remove after debugging)
+        _logger?.LogInformation("[MessageReceived] From: {Author}, Channel: {Channel}, Content length: {Length}, Content: '{Content}'",
+            message.Author?.Username ?? "null",
+            message.Channel?.Name ?? "null",
+            message.Content?.Length ?? -1,
+            message.Content?.Length > 50 ? message.Content.Substring(0, 50) + "..." : message.Content ?? "(null)");
+
         if (message.Author.IsBot || message.Channel is not SocketTextChannel) return;
 
         Collector.Track(message);
