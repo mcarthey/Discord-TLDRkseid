@@ -56,14 +56,9 @@ public class Startup
 
         Client = new DiscordSocketClient(new DiscordSocketConfig
         {
-            // Explicitly specify intents - GuildMembers is enabled in portal so include it
-            GatewayIntents = GatewayIntents.Guilds
-                | GatewayIntents.GuildMembers  // Privileged - enabled in Discord portal
-                | GatewayIntents.GuildMessages
-                | GatewayIntents.GuildMessageReactions
-                | GatewayIntents.DirectMessages
-                | GatewayIntents.DirectMessageReactions
-                | GatewayIntents.MessageContent,  // Privileged - enabled in Discord portal
+            // Request ALL intents to diagnose which one is needed
+            // Privileged intents (GuildMembers, GuildPresences, MessageContent) are enabled in Discord portal
+            GatewayIntents = GatewayIntents.All,
             // Log gateway intent issues
             LogGatewayIntentWarnings = true,
             // Ensure we receive all messages
