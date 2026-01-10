@@ -1,5 +1,6 @@
 using Discord;
 using Discord.WebSocket;
+using DotNetEnv;
 using Xunit.Abstractions;
 
 namespace TLDRkseid.Tests.Integration;
@@ -9,14 +10,13 @@ namespace TLDRkseid.Tests.Integration;
 /// These tests require real Discord credentials and are excluded from CI.
 ///
 /// To run locally:
-/// 1. Set environment variable DISCORD_BOT_TOKEN with your bot token
-/// 2. Set environment variable DISCORD_TEST_CHANNEL_ID with a channel ID where the bot can read/write
-/// 3. Run: dotnet test --filter "Category=Integration"
+/// 1. Create a .env file in the solution root (or TLDRkseid.Tests folder) with:
+///    DISCORD_BOT_TOKEN=your-token-here
+///    DISCORD_TEST_CHANNEL_ID=1234567890
+/// 2. Or set environment variables directly
+/// 3. Run: dotnet test --filter "Category=Integration" --logger "console;verbosity=detailed"
 ///
-/// To run from command line:
-/// $env:DISCORD_BOT_TOKEN="your-token-here"
-/// $env:DISCORD_TEST_CHANNEL_ID="1234567890"
-/// dotnet test --filter "Category=Integration" --logger "console;verbosity=detailed"
+/// IMPORTANT: Never commit your .env file! It should be in .gitignore.
 /// </summary>
 [Trait("Category", "Integration")]
 public class DiscordGatewayIntegrationTests : IAsyncLifetime
@@ -32,8 +32,36 @@ public class DiscordGatewayIntegrationTests : IAsyncLifetime
     public DiscordGatewayIntegrationTests(ITestOutputHelper output)
     {
         _output = output;
+
+        // Try to load .env file from various locations
+        var possibleEnvPaths = new[]
+        {
+            ".env",                                           // Current directory
+            "../.env",                                        // Parent (solution root from test bin)
+            "../../.env",                                     // Two levels up
+            "../../../.env",                                  // Three levels up
+            "../../../../.env",                               // Four levels up (from bin/Debug/net10.0)
+            "../../../../../.env",                            // Five levels up
+            Path.Combine(AppContext.BaseDirectory, ".env"),   // Base directory
+        };
+
+        foreach (var envPath in possibleEnvPaths)
+        {
+            var fullPath = Path.GetFullPath(envPath);
+            if (File.Exists(fullPath))
+            {
+                _output.WriteLine($"Loading .env from: {fullPath}");
+                Env.Load(fullPath);
+                break;
+            }
+        }
+
         _token = Environment.GetEnvironmentVariable("DISCORD_BOT_TOKEN");
         var channelIdStr = Environment.GetEnvironmentVariable("DISCORD_TEST_CHANNEL_ID");
+
+        _output.WriteLine($"DISCORD_BOT_TOKEN: {(_token != null ? $"[{_token.Length} chars]" : "NOT SET")}");
+        _output.WriteLine($"DISCORD_TEST_CHANNEL_ID: {channelIdStr ?? "NOT SET"}");
+
         if (ulong.TryParse(channelIdStr, out var channelId))
         {
             _testChannelId = channelId;
