@@ -56,7 +56,15 @@ public class Startup
 
         Client = new DiscordSocketClient(new DiscordSocketConfig
         {
-            GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
+            // Explicitly specify intents instead of AllUnprivileged to ensure GuildMessages is included
+            GatewayIntents = GatewayIntents.Guilds
+                | GatewayIntents.GuildMessages
+                | GatewayIntents.GuildMessageReactions
+                | GatewayIntents.DirectMessages
+                | GatewayIntents.DirectMessageReactions
+                | GatewayIntents.MessageContent,
+            // Log gateway intent issues
+            LogGatewayIntentWarnings = true
         });
 
         Interactions = new InteractionService(Client.Rest);
