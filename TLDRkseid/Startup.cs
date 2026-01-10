@@ -141,6 +141,7 @@ public class Startup
         {
             Client.Log += Log;
             Client.MessageReceived += MessageReceived;
+            Console.WriteLine("✅ MessageReceived event handler registered");
 
             Client.InteractionCreated += async interaction =>
             {
@@ -235,18 +236,24 @@ public class Startup
 
     private async Task MessageReceived(SocketMessage message)
     {
-        // Debug: Log every message received to diagnose MessageContent intent issues (temporary - remove after debugging)
-        _logger?.LogInformation("[MessageReceived] From: {Author}, Channel: {Channel}, Content length: {Length}, Content: '{Content}'",
-            message.Author?.Username ?? "null",
-            message.Channel?.Name ?? "null",
-            message.Content?.Length ?? -1,
-            message.Content?.Length > 50 ? message.Content.Substring(0, 50) + "..." : message.Content ?? "(null)");
+        try
+        {
+            // Debug: Use Console.WriteLine as fallback in case logging isn't working
+            var logMsg = $"[MessageReceived] From: {message.Author?.Username ?? "null"}, Channel: {message.Channel?.Name ?? "null"}, Content length: {message.Content?.Length ?? -1}";
+            Console.WriteLine(logMsg);
+            _logger?.LogInformation(logMsg);
 
-        if (message.Author.IsBot || message.Channel is not SocketTextChannel) return;
+            if (message.Author.IsBot || message.Channel is not SocketTextChannel) return;
 
-        Collector.Track(message);
-        var handler = _services.GetRequiredService<MessageCommandHandler>();
-        await handler.HandleAsync(message);
+            Collector.Track(message);
+            var handler = _services.GetRequiredService<MessageCommandHandler>();
+            await handler.HandleAsync(message);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MessageReceived ERROR] {ex.GetType().Name}: {ex.Message}");
+            _logger?.LogError(ex, "[MessageReceived] Exception in handler");
+        }
     }
 
     private Task Log(LogMessage msg)
