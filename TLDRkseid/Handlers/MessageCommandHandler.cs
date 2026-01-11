@@ -110,7 +110,7 @@ public class MessageCommandHandler : IAsyncDisposable
             }
 
             var content = message.Content.Trim();
-            if (!content.StartsWith("!admin", System.StringComparison.OrdinalIgnoreCase)) return;
+            if (!content.StartsWith("$admin", System.StringComparison.OrdinalIgnoreCase)) return;
 
             // Rate limiting check for admin commands
             if (_spamBlocker.IsAdminCommandSpamming(channel.Guild.Id.ToString(), message.Author.Id.ToString(), out var spamReason))
@@ -143,7 +143,7 @@ public class MessageCommandHandler : IAsyncDisposable
             if (args.Length < 2)
             {
                 _logger.LogWarning("Insufficient arguments for admin command.");
-                await EphemeralReply("⚙️ Usage: `!admin add/remove/list/whoami/refresh/add-superuser`");
+                await EphemeralReply("⚙️ Usage: `$admin add/remove/list/whoami/refresh/add-superuser`");
                 return;
             }
 
@@ -180,7 +180,7 @@ public class MessageCommandHandler : IAsyncDisposable
                     if (args.Length < 3 || newSuperuser == null)
                     {
                         _logger.LogWarning("add-superuser command missing user mention.");
-                        await EphemeralReply("⚠️ Tag a user: `!admin add-superuser @user`");
+                        await EphemeralReply("⚠️ Tag a user: `$admin add-superuser @user`");
                         return;
                     }
                     var assigned = await _access.TryAssignSuperuserAsync(guildId, newSuperuser.Id, userId);
@@ -207,7 +207,7 @@ public class MessageCommandHandler : IAsyncDisposable
                     if (args.Length < 3 || targetUser == null)
                     {
                         _logger.LogWarning("Missing user mention in admin {Command} command.", command);
-                        await EphemeralReply($"⚠️ Tag a user: `!admin {command} @user`");
+                        await EphemeralReply($"⚠️ Tag a user: `$admin {command} @user`");
                         return;
                     }
                     var action = command == "add"
@@ -292,7 +292,7 @@ public class MessageCommandHandler : IAsyncDisposable
                     if (args.Length < 3 || transferTarget == null)
                     {
                         _logger.LogWarning("transfer-superuser command missing user mention.");
-                        await EphemeralReply("⚠️ Tag a user: `!admin transfer-superuser @user`");
+                        await EphemeralReply("⚠️ Tag a user: `$admin transfer-superuser @user`");
                         return;
                     }
                     var transferred = await _access.TransferSuperuserAsync(guildId, transferTarget.Id, userId);
@@ -302,7 +302,7 @@ public class MessageCommandHandler : IAsyncDisposable
                     }
                     else
                     {
-                        await EphemeralReply("❌ No superuser to transfer. Use `!admin add-superuser @user` first.");
+                        await EphemeralReply("❌ No superuser to transfer. Use `$admin add-superuser @user` first.");
                     }
                     break;
 
@@ -317,7 +317,7 @@ public class MessageCommandHandler : IAsyncDisposable
                     var revoked = await _access.RevokeSuperuserAsync(guildId, userId);
                     if (revoked)
                     {
-                        await EphemeralReply("✅ Superuser has been revoked. Use `!admin add-superuser @user` to assign a new one.");
+                        await EphemeralReply("✅ Superuser has been revoked. Use `$admin add-superuser @user` to assign a new one.");
                     }
                     else
                     {

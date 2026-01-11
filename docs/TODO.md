@@ -63,12 +63,17 @@ Project roadmap and pending tasks.
 - [ ] Usage analytics per guild
 - [ ] Cost limits/budgets per guild
 - [ ] Granular permissions (who can use "max" depth)
+- [ ] Configurable admin command prefix (currently `$admin`, allow superuser to change)
 
 ### Observability
 - [ ] Add metrics/Prometheus export
 - [x] Health check endpoint for monitoring - `/health`, `/health/live`, `/health/ready` endpoints added
 - [ ] Performance timing on key operations
 - [ ] Log rotation for database logs
+- [x] Debug logging (heartbeat, console flush) in Startup.cs - retained intentionally for diagnostics
+
+### Content & Documentation
+- [ ] Blog post: "When Your Discord Bot Stops Hearing" - debugging corrupted Discord Application (LearnedGeek.com)
 
 ---
 

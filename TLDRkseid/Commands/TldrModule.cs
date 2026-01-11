@@ -324,7 +324,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 .AddField("🔧 Other Commands",
                     "`/cost` - View API usage statistics\n" +
                     "`/tldr-config` - (Admins) Set server default depth\n" +
-                    "`!admin` - (Admins) Manage bot permissions",
+                    "`$admin` - (Admins) Manage bot permissions",
                     inline: false)
                 .WithFooter($"Server default: {defaultDepth} • github.com/mcarthey/Discord-TLDRkseid");
 

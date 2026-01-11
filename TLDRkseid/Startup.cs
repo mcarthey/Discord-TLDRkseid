@@ -137,6 +137,15 @@ public class Startup
             Client.Log += Log;
             Client.MessageReceived += MessageReceived;
             Console.WriteLine("✅ MessageReceived event handler registered");
+            Console.Out.Flush();
+
+            // Debug: Log ALL gateway events to see if anything is coming through
+            Client.LatencyUpdated += (old, newLatency) =>
+            {
+                Console.WriteLine($"[HEARTBEAT] Latency: {newLatency}ms");
+                Console.Out.Flush();
+                return Task.CompletedTask;
+            };
 
             Client.InteractionCreated += async interaction =>
             {
@@ -236,6 +245,7 @@ public class Startup
             // Debug: Use Console.WriteLine as fallback in case logging isn't working
             var logMsg = $"[MessageReceived] From: {message.Author?.Username ?? "null"}, Channel: {message.Channel?.Name ?? "null"}, Content length: {message.Content?.Length ?? -1}";
             Console.WriteLine(logMsg);
+            Console.Out.Flush();
             _logger?.LogInformation(logMsg);
 
             if (message.Author.IsBot || message.Channel is not SocketTextChannel) return;
