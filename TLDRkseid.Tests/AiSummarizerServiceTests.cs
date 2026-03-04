@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using OpenAI.Interfaces;
 using OpenAI.ObjectModels.RequestModels;
@@ -7,6 +8,7 @@ using OpenAI.ObjectModels.ResponseModels;
 using OpenAI.ObjectModels.SharedModels;
 using System.Net;
 using System.Reflection;
+using TLDRkseid.Configuration;
 using TLDRkseid.Data;
 using TLDRkseid.Services;
 
@@ -42,7 +44,8 @@ public class AiSummarizerServiceTests : IDisposable
 
         _mockLogger = new Mock<ILogger<AiSummarizerService>>();
 
-        _service = new AiSummarizerService(_mockOpenAi.Object, _costTracker, _mockLogger.Object);
+        var settings = Options.Create(new OpenAISettings());
+        _service = new AiSummarizerService(_mockOpenAi.Object, _costTracker, _mockLogger.Object, settings);
     }
 
     public void Dispose()
