@@ -47,7 +47,7 @@ Project roadmap and pending tasks.
 ## Medium Priority - Post-Launch Improvements
 
 ### Feature Enhancements
-- [ ] Time-based filtering (`/tldr since:24h` or `/tldr since:yesterday`)
+- [x] Time-based filtering (`/tldr since:1h`, `/tldr since:24h`, etc.) - Added `since:` parameter with 1h, 6h, 12h, 24h, 3d, 7d options
 - [ ] Message link preservation in summaries (show sources)
 - [ ] Multiple summary formats (bullets, paragraph, Q&A)
 - [ ] Regenerate/expand/simplify buttons on summaries
@@ -115,6 +115,8 @@ Project roadmap and pending tasks.
 
 ## Deployment & Release
 
+> **📋 For a clean list of YOUR manual action items, see [`docs/OWNER-CHECKLIST.md`](OWNER-CHECKLIST.md)**
+
 ### 🚀 Quick Deploy Summary (Your 3 Steps)
 
 **Everything else is automated!** You only need to:
@@ -163,7 +165,7 @@ Project roadmap and pending tasks.
 - [x] **Run production build** - Dockerfile handles Release build automatically ✅
 - [x] ~~**👀 YOU: Test in staging environment**~~ - Tested directly on production ✅
 - [x] **👀 YOU: Verify all commands work** - `/tldr` tested and working ✅
-- [ ] **👀 YOU: Test admin commands** - Test `!admin` commands after deploy
+- [ ] **👀 YOU: Test admin commands** - Test `$admin` commands after deploy (see `docs/OWNER-CHECKLIST.md`)
 - [x] **Load test** - Bot handles concurrent requests gracefully (rate limiting implemented) ✅
 
 ### Docker Deployment (If Using Containers)
@@ -220,7 +222,7 @@ Without a volume, your database is lost on each redeploy!
 ### Public Release
 
 - [x] **Add LICENSE file** - Apache 2.0 license added ✅
-- [ ] **Create CONTRIBUTING.md** - Guidelines for contributors
+- [x] **Create CONTRIBUTING.md** - Guidelines for contributors ✅
 - [x] **Add bot invite link to README** - OAuth2 URL added with correct permissions ✅
 - [ ] **🚨 Configure OpenAI cost alerts** - BLOCKER: Set hard limit and email alerts in OpenAI dashboard
 - [ ] **Create landing page** (optional) - Simple site explaining the bot
@@ -369,6 +371,20 @@ Without a volume, your database is lost on each redeploy!
 - [x] Handle Discord.NET deserialization errors - Gracefully skip message batches with unsupported components (Discord.NET 3.17.2 bug)
 - [x] **Bot successfully deployed and running on Railway!** 🎉
 
+### Release Preparation (March 2026)
+- [x] Add time-based filtering - `/tldr since:1h|6h|12h|24h|3d|7d`
+- [x] Add `/invite` command - bot invite link for discoverability
+- [x] Add `/about` command - bot info, server count, links
+- [x] Enhance `/cost` with per-guild, per-day statistics
+- [x] Tighten GatewayIntents - changed from `All` to `Guilds|GuildMessages|MessageContent`
+- [x] Clean up debug logging - removed Console.WriteLines, lowered log level
+- [x] Wire AiSummarizerService to appsettings.json configuration
+- [x] Fix README admin prefix from `!admin` to `$admin`
+- [x] Add transfer-superuser and revoke-superuser to README
+- [x] Create CONTRIBUTING.md
+- [x] Create bot listing descriptions (`docs/BOT-LISTING.md`)
+- [x] Create owner checklist (`docs/OWNER-CHECKLIST.md`)
+
 ---
 
 ## Issue Summary
@@ -380,8 +396,8 @@ Without a volume, your database is lost on each redeploy!
 | UX Improvements | 0 | ~~High~~ ✅ |
 | Missing Core Features | 0 | ~~High~~ ✅ |
 | Security | 0 | ~~High~~ ✅ |
-| **Deployment** | **~35** | **High - Before Launch** |
-| Feature Enhancements | 5 | Medium |
+| **Owner Manual Steps** | **~15** | **High — See `docs/OWNER-CHECKLIST.md`** |
+| Feature Enhancements | 4 | Medium |
 | Performance | 2 | Medium |
 | Admin Features | 4 | Medium |
 | Observability | 3 | Medium |
@@ -434,4 +450,4 @@ All quick wins have been completed!
 - **Status:** Waiting for Discord.NET library fix
 - **Tracking:** Error is logged with warning level, bot continues gracefully
 
-*Last updated: January 2026*
+*Last updated: March 2026*
