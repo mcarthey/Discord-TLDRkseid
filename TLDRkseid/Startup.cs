@@ -56,14 +56,14 @@ public class Startup
 
         Client = new DiscordSocketClient(new DiscordSocketConfig
         {
-            // Request ALL intents to diagnose which one is needed
-            // Privileged intents (GuildMembers, GuildPresences, MessageContent) are enabled in Discord portal
-            GatewayIntents = GatewayIntents.All,
-            // Log gateway intent issues
+            // Only request intents the bot actually needs
+            // MessageContent is a privileged intent enabled in Discord Developer Portal
+            GatewayIntents = GatewayIntents.Guilds
+                           | GatewayIntents.GuildMessages
+                           | GatewayIntents.MessageContent,
             LogGatewayIntentWarnings = true,
-            // Ensure we receive all messages
             MessageCacheSize = 100,
-            LogLevel = LogSeverity.Debug
+            LogLevel = LogSeverity.Info
         });
 
         Interactions = new InteractionService(Client.Rest);
@@ -136,16 +136,6 @@ public class Startup
         {
             Client.Log += Log;
             Client.MessageReceived += MessageReceived;
-            Console.WriteLine("✅ MessageReceived event handler registered");
-            Console.Out.Flush();
-
-            // Debug: Log ALL gateway events to see if anything is coming through
-            Client.LatencyUpdated += (old, newLatency) =>
-            {
-                Console.WriteLine($"[HEARTBEAT] Latency: {newLatency}ms");
-                Console.Out.Flush();
-                return Task.CompletedTask;
-            };
 
             Client.InteractionCreated += async interaction =>
             {
@@ -163,12 +153,6 @@ public class Startup
                 var logger = _services.GetRequiredService<ILogger<Startup>>();
 
                 // Log the actual intents the client is using
-                var config = Client.CurrentUser != null ? "Connected" : "Not connected";
-                logger.LogInformation("🔧 Gateway Intents requested: {Intents} (value: {IntentValue})",
-                    Client.CurrentUser != null ? "Ready" : "Unknown",
-                    (int)(GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.GuildMessageReactions
-                        | GatewayIntents.DirectMessages | GatewayIntents.DirectMessageReactions | GatewayIntents.MessageContent));
-
                 var devGuildId = Environment.GetEnvironmentVariable("DISCORD_DEV_GUILD_ID");
                 if (ulong.TryParse(devGuildId, out var guildId))
                 {
@@ -242,13 +226,7 @@ public class Startup
     {
         try
         {
-            // Debug: Use Console.WriteLine as fallback in case logging isn't working
-            var logMsg = $"[MessageReceived] From: {message.Author?.Username ?? "null"}, Channel: {message.Channel?.Name ?? "null"}, Content length: {message.Content?.Length ?? -1}";
-            Console.WriteLine(logMsg);
-            Console.Out.Flush();
-            _logger?.LogInformation(logMsg);
-
-            if (message.Author.IsBot || message.Channel is not SocketTextChannel) return;
+            if (message.Author?.IsBot != false || message.Channel is not SocketTextChannel) return;
 
             Collector.Track(message);
             var handler = _services.GetRequiredService<MessageCommandHandler>();
@@ -256,8 +234,7 @@ public class Startup
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MessageReceived ERROR] {ex.GetType().Name}: {ex.Message}");
-            _logger?.LogError(ex, "[MessageReceived] Exception in handler");
+            _logger?.LogError(ex, "Exception in MessageReceived handler");
         }
     }
 

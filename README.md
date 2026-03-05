@@ -19,9 +19,10 @@ Or self-host your own instance - see [Self-Hosting Guide](#self-hosting) below.
 Once the bot is in your server:
 
 1. **Get a summary:** `/tldr depth:standard`
-2. **Filter by user:** `/tldr depth:brief user:@someone`
-3. **Check costs:** `/cost`
-4. **See all options:** `/tldr-help`
+2. **Summarize last hour:** `/tldr since:1h`
+3. **Filter by user:** `/tldr depth:brief user:@someone`
+4. **Check costs:** `/cost`
+5. **See all options:** `/tldr-help`
 
 That's it! The bot responds privately (ephemeral) so it won't clutter your channels.
 
@@ -33,12 +34,13 @@ That's it! The bot responds privately (ephemeral) so it won't clutter your chann
 |---------|-------------|
 | **AI Summaries** | Powered by OpenAI GPT-3.5-turbo |
 | **5 Depth Levels** | From quick skim to deep dive |
+| **Time-Based Filters** | Summarize the last 1h, 6h, 24h, 3d, or 7d |
 | **User Filtering** | Summarize a specific person's messages |
 | **Thread Support** | Works in threads too |
-| **Smart Caching** | Reuses summaries when messages haven't changed |
+| **Smart Caching** | Reuses summaries when messages haven't changed (instant & free) |
 | **Rate Limiting** | Built-in spam protection |
 | **Privacy First** | All responses are ephemeral (only you see them) |
-| **Cost Tracking** | See API cost per summary and totals |
+| **Per-Server Stats** | See API costs and request counts per server |
 
 ---
 
@@ -48,13 +50,16 @@ That's it! The bot responds privately (ephemeral) so it won't clutter your chann
 
 | Command | Description |
 |---------|-------------|
-| `/tldr depth:[level]` | Summarize recent messages |
-| `/tldr depth:[level] user:@someone` | Summarize a specific user's messages |
-| `/tldr-help` | Show available depth options |
+| `/tldr depth:[level]` | Summarize by message count |
+| `/tldr since:[time]` | Summarize by time window |
+| `/tldr user:@someone` | Filter to one person |
+| `/tldr-help` | Show all options |
 | `/tldr-config` | View/set server's default depth |
 | `/cost` | View API usage costs for your server |
+| `/invite` | Get the bot invite link |
+| `/about` | Bot info and links |
 
-### Summary Depth Levels
+### Summary Depth Levels (by message count)
 
 | Depth | Messages | Best For |
 |-------|----------|----------|
@@ -64,18 +69,31 @@ That's it! The bot responds privately (ephemeral) so it won't clutter your chann
 | `deep` | ~400 | Missed a busy day |
 | `max` | ~500 | Deep dive (may be less focused) |
 
+### Time Filters (by time window)
+
+| Since | Window | Best For |
+|-------|--------|----------|
+| `1h` | Last hour | Quick check |
+| `6h` | Last 6 hours | Half-day catch-up |
+| `12h` | Last 12 hours | Overnight catch-up |
+| `24h` / `1d` | Last 24 hours | Full day recap |
+| `3d` | Last 3 days | Weekend catch-up |
+| `7d` | Last week | Extended absence |
+
 ### For Server Admins
 
-Admin commands use the `!admin` prefix and auto-delete after 10 seconds for privacy.
+Admin commands use the `$admin` prefix and auto-delete after 10 seconds for privacy.
 
 | Command | Description | Who Can Use |
 |---------|-------------|-------------|
-| `!admin add-superuser @user` | Assign the server's superuser (one-time setup) | Server Owner only |
-| `!admin add @user` | Add an admin | Superuser only |
-| `!admin remove @user` | Remove an admin | Superuser only |
-| `!admin list` | List all admins | Superuser only |
-| `!admin whoami` | Check your role | Anyone |
-| `!admin refresh` | Re-sync slash commands | Admins |
+| `$admin add-superuser @user` | Assign the server's superuser (one-time setup) | Server Owner only |
+| `$admin add @user` | Add an admin | Superuser only |
+| `$admin remove @user` | Remove an admin | Superuser only |
+| `$admin list` | List all admins | Superuser only |
+| `$admin whoami` | Check your role | Anyone |
+| `$admin refresh` | Re-sync slash commands | Admins |
+| `$admin transfer-superuser @user` | Transfer superuser role | Server Owner only |
+| `$admin revoke-superuser` | Remove superuser assignment | Server Owner only |
 
 ---
 

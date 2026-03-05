@@ -1,4 +1,4 @@
-﻿using Discord;
+using Discord;
 using Discord.Interactions;
 using Discord.Net;
 using Discord.WebSocket;
@@ -27,11 +27,25 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         { "max", 500 }
     };
 
+    private static readonly Dictionary<string, TimeSpan> SinceMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "1h", TimeSpan.FromHours(1) },
+        { "6h", TimeSpan.FromHours(6) },
+        { "12h", TimeSpan.FromHours(12) },
+        { "24h", TimeSpan.FromHours(24) },
+        { "1d", TimeSpan.FromDays(1) },
+        { "3d", TimeSpan.FromDays(3) },
+        { "7d", TimeSpan.FromDays(7) }
+    };
+
     // Timeout for message fetch operations
     private static readonly TimeSpan MessageFetchTimeout = TimeSpan.FromSeconds(15);
 
     // Discord embed description limit
     private const int EmbedDescriptionLimit = 4096;
+
+    // Max messages to fetch when using time-based filtering
+    private const int MaxTimeFetchMessages = 500;
 
     // Retry settings for Discord API throttling
     private const int MaxRetries = 3;
@@ -57,10 +71,10 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
 
     [SlashCommand("tldr", "Summarize recent messages (uses server default if no depth specified)")]
     public async Task TldrAsync(
-       [Summary(description: "Summary depth: recent, brief, standard, deep, or max (optional)")] string? depth = null,
+       [Summary(description: "Summary depth: recent, brief, standard, deep, or max")] string? depth = null,
+       [Summary(description: "Time window: 1h, 6h, 12h, 24h, 3d, 7d (overrides depth)")] string? since = null,
        [Summary(description: "Optional user to filter")] IUser? user = null)
     {
-        // Create a logging scope with additional context
         using (_logger.BeginScope(new Dictionary<string, object>
         {
             ["GuildId"] = Context.Guild?.Id ?? 0,
@@ -71,29 +85,47 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
             ["InvokerName"] = Context.User.Username
         }))
         {
-            // Use guild's preferred depth if none specified
-            var effectiveDepth = depth;
-            var usedDefault = false;
-            if (string.IsNullOrWhiteSpace(effectiveDepth))
+            // Validate time-based filter if provided
+            TimeSpan? sinceDuration = null;
+            if (!string.IsNullOrWhiteSpace(since))
             {
-                if (Context.Guild != null)
+                if (!SinceMap.TryGetValue(since, out var duration))
                 {
-                    effectiveDepth = await _guildSettings.GetPreferredDepthAsync(Context.Guild.Id);
-                    usedDefault = true;
-                    _logger.LogInformation("Using guild's preferred depth: {Depth}", effectiveDepth);
+                    await RespondAsync("❌ Invalid `since` value. Options: `1h`, `6h`, `12h`, `24h`, `3d`, `7d`", ephemeral: true);
+                    return;
                 }
-                else
-                {
-                    effectiveDepth = GuildSettingsService.DefaultDepth;
-                    usedDefault = true;
-                }
+                sinceDuration = duration;
             }
 
-            if (!DepthMap.TryGetValue(effectiveDepth, out var messageLimit))
+            // Use guild's preferred depth if none specified and no time filter
+            var effectiveDepth = depth;
+            var usedDefault = false;
+            if (sinceDuration == null)
             {
-                _logger.LogWarning("Invalid depth parameter received: {Depth}", effectiveDepth);
-                await RespondAsync("❌ Invalid depth. Try `/tldr-help` for valid options.", ephemeral: true);
-                return;
+                if (string.IsNullOrWhiteSpace(effectiveDepth))
+                {
+                    if (Context.Guild != null)
+                    {
+                        effectiveDepth = await _guildSettings.GetPreferredDepthAsync(Context.Guild.Id);
+                        usedDefault = true;
+                    }
+                    else
+                    {
+                        effectiveDepth = GuildSettingsService.DefaultDepth;
+                        usedDefault = true;
+                    }
+                }
+
+                if (!DepthMap.TryGetValue(effectiveDepth, out _))
+                {
+                    await RespondAsync("❌ Invalid depth. Try `/tldr-help` for valid options.", ephemeral: true);
+                    return;
+                }
+            }
+            else
+            {
+                // When using time-based, default depth label for display
+                effectiveDepth = "time";
             }
 
             // Support both text channels and thread/forum channels
@@ -112,11 +144,9 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 guild = threadChannel.Guild;
                 messageChannel = threadChannel;
                 guildChannel = threadChannel;
-                _logger.LogInformation("Command invoked in thread/forum: {ThreadName}", threadChannel.Name);
             }
             else
             {
-                _logger.LogWarning("Command invoked in unsupported channel type: {ChannelType}", Context.Channel.GetType().Name);
                 await RespondAsync("❌ This command only works in text channels, threads, or forum posts.", ephemeral: true);
                 return;
             }
@@ -124,7 +154,6 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
             var botUser = guild.GetUser(Context.Client.CurrentUser.Id);
             if (botUser == null)
             {
-                _logger.LogError("Bot user was null in guild {GuildName}", guild.Name);
                 await RespondAsync("⚠️ Could not verify bot permissions in this channel.", ephemeral: true);
                 return;
             }
@@ -137,8 +166,6 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
 
             if (missingPerms.Count > 0)
             {
-                _logger.LogWarning("Insufficient bot permissions in channel {ChannelName}: {MissingPerms}",
-                    guildChannel.Name, string.Join(", ", missingPerms));
                 await RespondAsync($"🚫 I'm missing these permissions in this channel:\n• {string.Join("\n• ", missingPerms)}\n\nPlease ask a server admin to grant these permissions.", ephemeral: true);
                 return;
             }
@@ -148,131 +175,141 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
 
             try
             {
-            // Warn about potential issues with "max" depth
-            if (effectiveDepth == "max")
-            {
-                await FollowupAsync("⚠️ `max` depth may result in slower or overly broad summaries. Use `/tldr-help` for more focused tiers.", ephemeral: true);
-            }
+                int messageLimit;
+                DateTimeOffset? cutoffTime = null;
 
-            _logger.LogInformation("Fetching up to {MessageLimit} messages for depth {Depth}.", messageLimit, effectiveDepth);
-
-            var messages = await FetchRecentMessages(messageChannel!, messageLimit);
-            _logger.LogInformation("Fetched {MessageCount} messages from channel.", messages.Count);
-
-            var filtered = messages
-                .Where(m => m.Author != null && !m.Author.IsBot)
-                .Where(m => user == null || m.Author.Id == user.Id)
-                .OrderBy(m => m.Timestamp)
-                .Select(m => $"{m.Author.Username}: {m.Content}")
-                .ToList();
-
-            if (!filtered.Any())
-            {
-                _logger.LogInformation("No messages found after filtering.");
-                await FollowupAsync("🕵️ No messages found for that depth and filter.", ephemeral: true);
-                return;
-            }
-
-            var uniqueLines = filtered.Select(m => m.ToLowerInvariant()).Distinct().Count();
-            var repetitionRatio = (double)uniqueLines / filtered.Count;
-            _logger.LogDebug("Filtered messages count: {Count}, Unique lines: {Unique}, Repetition ratio: {Ratio:P}",
-                filtered.Count, uniqueLines, repetitionRatio);
-
-            if (effectiveDepth == "max" && repetitionRatio < 0.6)
-            {
-                _logger.LogInformation("Repetitive messages detected. Repetition ratio: {Ratio:P}", repetitionRatio);
-                await FollowupAsync("⚠️ A large portion of messages appear repetitive. Summary may be diluted or vague.", ephemeral: true);
-            }
-
-            string summary;
-            double cost = 0;
-            bool wasCached = false;
-            var guildIdStr = Context.Guild?.Id.ToString() ?? "dm";
-            var channelIdStr = Context.Channel.Id.ToString();
-            string? userIdStr = user == null ? null : user.Id.ToString();
-
-            _logger.LogInformation("Command invoked: /tldr depth:{Depth} user:{User}", effectiveDepth, user?.Username ?? "none");
-
-            if (_cache.TryGet(guildIdStr, channelIdStr, effectiveDepth, userIdStr, filtered, out summary, out cost))
-            {
-                wasCached = true;
-                _logger.LogInformation("Cache HIT for command /tldr with depth: {Depth} in channel: {ChannelId}", effectiveDepth, channelIdStr);
-
-                if (_spamBlocker.IsCachedSpamming(guildIdStr, channelIdStr, Context.User.Id.ToString(), out var spamReason))
+                if (sinceDuration != null)
                 {
-                    _logger.LogWarning("Cached spam threshold exceeded: {Reason}", spamReason);
-                    await FollowupAsync(spamReason, ephemeral: true);
-                    return;
+                    messageLimit = MaxTimeFetchMessages;
+                    cutoffTime = DateTimeOffset.UtcNow - sinceDuration.Value;
+                    _logger.LogInformation("Time-based fetch: since {Since} (cutoff: {Cutoff}), max {Limit} messages",
+                        since, cutoffTime, messageLimit);
                 }
-            }
-            else
-            {
-                _logger.LogInformation("Cache MISS for command /tldr with depth: {Depth} in channel: {ChannelId}", effectiveDepth, channelIdStr);
-
-                var requestingUserId = Context.User.Id;
-                var isAdmin = await _access.CanAccessAdminFeaturesAsync(Context.Guild?.Id ?? 0, requestingUserId);
-
-                if (_spamBlocker.IsSpamming(guildIdStr, channelIdStr, requestingUserId.ToString(), isAdmin, wasCached: false, out var spamReason))
+                else
                 {
-                    _logger.LogWarning("Spam check triggered: {Reason}", spamReason);
-                    await FollowupAsync(spamReason, ephemeral: true);
+                    messageLimit = DepthMap[effectiveDepth];
+
+                    if (effectiveDepth == "max")
+                    {
+                        await FollowupAsync("⚠️ `max` depth may result in slower or overly broad summaries. Use `/tldr-help` for more focused tiers.", ephemeral: true);
+                    }
+                }
+
+                var messages = await FetchRecentMessages(messageChannel!, messageLimit, cutoffTime);
+                _logger.LogInformation("Fetched {MessageCount} messages from channel.", messages.Count);
+
+                var filtered = messages
+                    .Where(m => m.Author != null && !m.Author.IsBot)
+                    .Where(m => user == null || m.Author.Id == user.Id)
+                    .OrderBy(m => m.Timestamp)
+                    .Select(m => $"{m.Author.Username}: {m.Content}")
+                    .ToList();
+
+                if (!filtered.Any())
+                {
+                    var noMsgText = sinceDuration != null
+                        ? $"🕵️ No messages found in the last {since}."
+                        : "🕵️ No messages found for that depth and filter.";
+                    await FollowupAsync(noMsgText, ephemeral: true);
                     return;
                 }
 
-                try
+                var uniqueLines = filtered.Select(m => m.ToLowerInvariant()).Distinct().Count();
+                var repetitionRatio = (double)uniqueLines / filtered.Count;
+
+                if (effectiveDepth == "max" && repetitionRatio < 0.6)
                 {
-                    var (generatedSummary, generatedCost) = await _summarizer.SummarizeAsync(filtered);
-                    summary = generatedSummary;
-                    cost = generatedCost;
-                    _cache.Set(guildIdStr, channelIdStr, effectiveDepth, userIdStr, filtered, summary, cost);
-
-                    _logger.LogInformation("Summarization succeeded with cost: {Cost:C}, summary length: {Length} characters.", cost, summary.Length);
+                    await FollowupAsync("⚠️ A large portion of messages appear repetitive. Summary may be diluted or vague.", ephemeral: true);
                 }
-                catch (Exception ex)
+
+                string summary;
+                double cost = 0;
+                bool wasCached = false;
+                var guildIdStr = Context.Guild?.Id.ToString() ?? "dm";
+                var channelIdStr = Context.Channel.Id.ToString();
+                string? userIdStr = user?.Id.ToString();
+                var cacheDepthKey = sinceDuration != null ? $"since-{since}" : effectiveDepth;
+
+                _logger.LogInformation("Command invoked: /tldr depth:{Depth} since:{Since} user:{User}",
+                    effectiveDepth, since ?? "none", user?.Username ?? "none");
+
+                if (_cache.TryGet(guildIdStr, channelIdStr, cacheDepthKey, userIdStr, filtered, out summary, out cost))
                 {
-                    _logger.LogError(ex, "AI summarization failed.");
-                    await FollowupAsync("🤖 AI summarization failed. Try again later.", ephemeral: true);
-                    return;
+                    wasCached = true;
+
+                    if (_spamBlocker.IsCachedSpamming(guildIdStr, channelIdStr, Context.User.Id.ToString(), out var spamReason))
+                    {
+                        await FollowupAsync(spamReason, ephemeral: true);
+                        return;
+                    }
                 }
-            }
+                else
+                {
+                    var requestingUserId = Context.User.Id;
+                    var isAdmin = await _access.CanAccessAdminFeaturesAsync(Context.Guild?.Id ?? 0, requestingUserId);
 
-            // Validate and truncate summary if it exceeds embed description limit
-            var displaySummary = summary;
-            var wasTruncated = false;
-            if (summary.Length > EmbedDescriptionLimit)
-            {
-                _logger.LogWarning("Summary exceeded embed limit ({Length} chars), truncating to {Limit}",
-                    summary.Length, EmbedDescriptionLimit);
-                displaySummary = summary[..(EmbedDescriptionLimit - 50)] + "\n\n*... (truncated due to length)*";
-                wasTruncated = true;
-            }
+                    if (_spamBlocker.IsSpamming(guildIdStr, channelIdStr, requestingUserId.ToString(), isAdmin, wasCached: false, out var spamReason))
+                    {
+                        await FollowupAsync(spamReason, ephemeral: true);
+                        return;
+                    }
 
-            // Build cache status indicator
-            var cacheStatus = wasCached ? "⚡ Cached (instant & free)" : "🆕 Fresh summary";
+                    try
+                    {
+                        var (generatedSummary, generatedCost) = await _summarizer.SummarizeAsync(filtered);
+                        summary = generatedSummary;
+                        cost = generatedCost;
+                        _cache.Set(guildIdStr, channelIdStr, cacheDepthKey, userIdStr, filtered, summary, cost);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "AI summarization failed.");
+                        await FollowupAsync("🤖 AI summarization failed. Try again later.", ephemeral: true);
+                        return;
+                    }
+                }
 
-            var footerText = $"{cacheStatus} • {(user != null ? $"Filtered: {user.Username}" : "All users")} • " +
-                             $"Cost: ${cost:F4} • Total: ${_costTracker.GetTotal():F2}";
+                // Validate and truncate summary if it exceeds embed description limit
+                var displaySummary = summary;
+                var wasTruncated = false;
+                if (summary.Length > EmbedDescriptionLimit)
+                {
+                    displaySummary = summary[..(EmbedDescriptionLimit - 50)] + "\n\n*... (truncated due to length)*";
+                    wasTruncated = true;
+                }
 
-            // Color coding: Green=cached, Purple=fresh, Orange=truncated, DarkRed=max depth
-            var embedColor = wasTruncated ? Color.Orange
-                           : wasCached ? Color.Green
-                           : effectiveDepth == "max" ? Color.DarkRed
-                           : Color.DarkPurple;
+                var cacheStatus = wasCached ? "⚡ Cached (instant & free)" : "🆕 Fresh summary";
 
-            var titleSuffix = wasTruncated ? " (Truncated)" : wasCached ? " ⚡" : "";
-            var depthLabel = usedDefault ? $"{effectiveDepth.ToUpper()} (default)" : effectiveDepth.ToUpper();
+                var footerText = $"{cacheStatus} • {(user != null ? $"Filtered: {user.Username}" : "All users")} • " +
+                                 $"{filtered.Count} msgs • Cost: ${cost:F4}";
 
-            var embed = new EmbedBuilder()
-                .WithTitle($"TL;DRkseid Summary – {depthLabel}{titleSuffix}")
-                .WithDescription(displaySummary)
-                .WithColor(embedColor)
-                .WithFooter(new EmbedFooterBuilder { Text = footerText });
+                var embedColor = wasTruncated ? Color.Orange
+                               : wasCached ? Color.Green
+                               : effectiveDepth == "max" ? Color.DarkRed
+                               : sinceDuration != null ? Color.Blue
+                               : Color.DarkPurple;
 
-            var builder = new ComponentBuilder()
-                .WithButton("Buy Me a Coffee ☕", style: ButtonStyle.Link, url: "https://buymeacoffee.com/mcarthey");
+                var titleSuffix = wasTruncated ? " (Truncated)" : wasCached ? " ⚡" : "";
+                string titleLabel;
+                if (sinceDuration != null)
+                {
+                    titleLabel = $"Last {since}";
+                }
+                else
+                {
+                    titleLabel = usedDefault ? $"{effectiveDepth.ToUpper()} (default)" : effectiveDepth.ToUpper();
+                }
 
-            _logger.LogInformation("Sending summary response to user.");
-            await FollowupAsync(embed: embed.Build(), components: builder.Build(), ephemeral: true);
+                var embed = new EmbedBuilder()
+                    .WithTitle($"TL;DRkseid Summary – {titleLabel}{titleSuffix}")
+                    .WithDescription(displaySummary)
+                    .WithColor(embedColor)
+                    .WithFooter(new EmbedFooterBuilder { Text = footerText });
+
+                var builder = new ComponentBuilder()
+                    .WithButton("Buy Me a Coffee ☕", style: ButtonStyle.Link, url: "https://buymeacoffee.com/mcarthey");
+
+                await FollowupAsync(embed: embed.Build(), components: builder.Build(), ephemeral: true);
             }
             catch (Exception ex)
             {
@@ -295,7 +332,6 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
             ["InvokerName"] = Context.User.Username
         }))
         {
-            // Get current guild default if in a guild
             var defaultDepth = Context.Guild != null
                 ? await _guildSettings.GetPreferredDepthAsync(Context.Guild.Id)
                 : GuildSettingsService.DefaultDepth;
@@ -307,33 +343,44 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 .AddField("📋 Basic Usage",
                     "`/tldr` - Summarize using server default depth\n" +
                     "`/tldr depth:brief` - Summarize with specific depth\n" +
+                    "`/tldr since:24h` - Summarize last 24 hours\n" +
                     "`/tldr user:@someone` - Summarize one person's messages",
                     inline: false)
-                .AddField("📊 Depth Levels",
+                .AddField("📊 Depth Levels (by message count)",
                     $"**recent** (~100 msgs) - Quick skim\n" +
                     $"**brief** (~200 msgs) - Short break catch-up\n" +
-                    $"**standard** (~300 msgs) - Daily check-in{(defaultDepth == "standard" ? " ⭐ (server default)" : "")}\n" +
-                    $"**deep** (~400 msgs) - Extended absence{(defaultDepth == "deep" ? " ⭐ (server default)" : "")}\n" +
-                    $"**max** (~500 msgs) - Full deep-dive ⚠️{(defaultDepth == "max" ? " (server default)" : "")}",
+                    $"**standard** (~300 msgs) - Daily check-in{(defaultDepth == "standard" ? " ⭐ default" : "")}\n" +
+                    $"**deep** (~400 msgs) - Extended absence{(defaultDepth == "deep" ? " ⭐ default" : "")}\n" +
+                    $"**max** (~500 msgs) - Full deep-dive ⚠️{(defaultDepth == "max" ? " ⭐ default" : "")}",
+                    inline: false)
+                .AddField("⏰ Time Filters (by time window)",
+                    "`1h` - Last hour\n" +
+                    "`6h` - Last 6 hours\n" +
+                    "`12h` - Last 12 hours\n" +
+                    "`24h` / `1d` - Last 24 hours\n" +
+                    "`3d` - Last 3 days\n" +
+                    "`7d` - Last week",
                     inline: false)
                 .AddField("💡 Tips",
                     "• Summaries are private (only you see them)\n" +
                     "• Cached results show ⚡ and are instant & free\n" +
-                    "• Green = cached, Purple = fresh, Orange = truncated",
+                    "• Use `since:` for precise time windows, `depth:` for message counts\n" +
+                    "• Combine with `user:` to filter specific people",
                     inline: false)
                 .AddField("🔧 Other Commands",
                     "`/cost` - View API usage statistics\n" +
+                    "`/invite` - Get the bot invite link\n" +
+                    "`/about` - Bot info and links\n" +
                     "`/tldr-config` - (Admins) Set server default depth\n" +
                     "`$admin` - (Admins) Manage bot permissions",
                     inline: false)
                 .WithFooter($"Server default: {defaultDepth} • github.com/mcarthey/Discord-TLDRkseid");
 
-            _logger.LogInformation("Providing tldr-help response.");
             await RespondAsync(embed: embed.Build(), ephemeral: true);
         }
     }
 
-    [SlashCommand("cost", "View API usage statistics")]
+    [SlashCommand("cost", "View API usage statistics for this server")]
     public async Task CostAsync()
     {
         using (_logger.BeginScope(new Dictionary<string, object>
@@ -344,24 +391,76 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
             ["InvokerName"] = Context.User.Username
         }))
         {
-            var totalCost = _costTracker.GetTotal();
+            if (Context.Guild == null)
+            {
+                var globalTotal = await _costTracker.GetTotalAsync();
+                await RespondAsync($"💰 Global API cost: **${globalTotal:F4}**", ephemeral: true);
+                return;
+            }
+
+            var stats = await _costTracker.GetGuildStatsAsync(Context.Guild.Id);
 
             var embed = new EmbedBuilder()
-                .WithTitle("💰 TL;DRkseid Usage Statistics")
+                .WithTitle($"💰 TL;DRkseid Usage – {Context.Guild.Name}")
                 .WithColor(Color.Gold)
-                .AddField("Total API Cost", $"${totalCost:F4}", inline: true)
-                .AddField("Model", "GPT-3.5-turbo", inline: true)
-                .AddField("Rate", "$0.002 / 1K tokens", inline: true)
+                .AddField("📊 This Server",
+                    $"**Today:** ${stats.TodayCost:F4} ({stats.TodayRequests} requests)\n" +
+                    $"**All Time:** ${stats.TotalCost:F4} ({stats.TotalRequests} requests)",
+                    inline: false)
+                .AddField("🔧 Model", "GPT-3.5-turbo ($0.002/1K tokens)", inline: true)
                 .AddField("💡 Save Money",
                     "• Cached summaries are **free** (shown with ⚡)\n" +
-                    "• Use lower depth levels when possible\n" +
-                    "• Filter by user to reduce token count",
+                    "• Use `since:1h` for smaller windows\n" +
+                    "• Filter by `user:` to reduce token count",
                     inline: false)
-                .WithFooter("Cost data persisted to database • Per-guild tracking enabled");
+                .WithFooter("Cost data persisted to database • Updated in real-time");
 
-            _logger.LogInformation("Providing cost statistics. Total: ${Total:F4}", totalCost);
             await RespondAsync(embed: embed.Build(), ephemeral: true);
         }
+    }
+
+    [SlashCommand("invite", "Get the link to add TLDRkseid to your server")]
+    public async Task InviteAsync()
+    {
+        var embed = new EmbedBuilder()
+            .WithTitle("🔗 Add TLDRkseid to Your Server")
+            .WithDescription("[**Click here to invite TLDRkseid**](https://discord.com/api/oauth2/authorize?client_id=1360355381875970239&permissions=93184&scope=bot%20applications.commands)")
+            .WithColor(Color.Blue)
+            .AddField("Required Permissions",
+                "• View Channels\n• Send Messages\n• Read Message History\n• Embed Links\n• Manage Messages (for admin commands)",
+                inline: false)
+            .WithFooter("TLDRkseid • AI-powered conversation summaries");
+
+        await RespondAsync(embed: embed.Build(), ephemeral: true);
+    }
+
+    [SlashCommand("about", "Learn about TLDRkseid")]
+    public async Task AboutAsync()
+    {
+        var guildCount = Context.Client.Guilds.Count;
+
+        var embed = new EmbedBuilder()
+            .WithTitle("🧠 About TL;DRkseid")
+            .WithDescription(
+                "**TLDRkseid** summarizes Discord conversations using AI so you never have to ask \"what did I miss?\"\n\n" +
+                "Unlike other summary bots, TLDRkseid features smart caching (instant re-summaries at zero cost), " +
+                "time-based filtering, per-user summaries, and tiered depth levels — all with ephemeral responses for privacy.")
+            .WithColor(Color.Teal)
+            .AddField("📈 Stats",
+                $"Servers: **{guildCount}**\n" +
+                $"Commands: `/tldr`, `/cost`, `/invite`, `/tldr-help`",
+                inline: true)
+            .AddField("🔗 Links",
+                "[GitHub](https://github.com/mcarthey/Discord-TLDRkseid) • " +
+                "[Privacy Policy](https://github.com/mcarthey/Discord-TLDRkseid/blob/main/PRIVACY.md) • " +
+                "[Terms of Service](https://github.com/mcarthey/Discord-TLDRkseid/blob/main/TERMS-OF-SERVICE.md)",
+                inline: true)
+            .AddField("☕ Support Development",
+                "[Buy Me a Coffee](https://buymeacoffee.com/mcarthey)",
+                inline: true)
+            .WithFooter("Built with Discord.Net + OpenAI • Apache 2.0 License");
+
+        await RespondAsync(embed: embed.Build(), ephemeral: true);
     }
 
     [SlashCommand("tldr-config", "Configure TLDRkseid settings for this server (Admin only)")]
@@ -382,16 +481,13 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 return;
             }
 
-            // Check if user is admin
             var isAdmin = await _access.CanAccessAdminFeaturesAsync(Context.Guild.Id, Context.User.Id);
             if (!isAdmin)
             {
-                _logger.LogWarning("Non-admin user {UserId} attempted to use /tldr-config", Context.User.Id);
                 await RespondAsync("⛔ Only server admins can configure TLDRkseid settings.", ephemeral: true);
                 return;
             }
 
-            // If no parameter provided, show current settings
             if (string.IsNullOrWhiteSpace(defaultDepth))
             {
                 var currentDepth = await _guildSettings.GetPreferredDepthAsync(Context.Guild.Id);
@@ -407,17 +503,14 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                 return;
             }
 
-            // Validate and set new depth
             if (!GuildSettingsService.IsValidDepth(defaultDepth))
             {
                 await RespondAsync($"❌ Invalid depth `{defaultDepth}`. Valid options: recent, brief, standard, deep, max", ephemeral: true);
                 return;
             }
 
-            // Check rate limiting before database write
             if (_guildSettings.IsRateLimited(Context.Guild.Id, out var rateLimitReason))
             {
-                _logger.LogWarning("Config change rate limited for guild {GuildId}: {Reason}", Context.Guild.Id, rateLimitReason);
                 await RespondAsync(rateLimitReason, ephemeral: true);
                 return;
             }
@@ -430,7 +523,7 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
-    private async Task<List<IMessage>> FetchRecentMessages(ISocketMessageChannel channel, int count)
+    private async Task<List<IMessage>> FetchRecentMessages(ISocketMessageChannel channel, int count, DateTimeOffset? cutoffTime = null)
     {
         var messages = new List<IMessage>();
         ulong? beforeMessageId = null;
@@ -447,7 +540,21 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
 
                 if (!batch.Any()) break;
 
-                messages.AddRange(batch);
+                // If time-based filtering, stop when we pass the cutoff
+                if (cutoffTime != null)
+                {
+                    var relevantBatch = batch.Where(m => m.Timestamp >= cutoffTime.Value).ToList();
+                    messages.AddRange(relevantBatch);
+
+                    // If we got fewer messages than the batch, we've passed the cutoff
+                    if (relevantBatch.Count < batch.Count())
+                        break;
+                }
+                else
+                {
+                    messages.AddRange(batch);
+                }
+
                 beforeMessageId = batch.Min(m => m.Id);
             }
         }
@@ -487,22 +594,16 @@ public class TldrModule : InteractionModuleBase<SocketInteractionContext>
                     throw;
                 }
 
-                _logger.LogDebug("Discord API rate limited, retrying in {Delay}ms (attempt {Attempt}/{MaxRetries})",
-                    delay.TotalMilliseconds, attempt, MaxRetries);
-
                 await Task.Delay(delay, ct);
-                delay *= 2; // Exponential backoff
+                delay *= 2;
             }
             catch (ArgumentNullException ex)
             {
-                // Discord.NET bug: some messages with components fail to deserialize
-                // Log and continue with empty batch rather than crashing
-                _logger.LogWarning(ex, "Discord.NET deserialization error fetching messages (likely a message with unsupported components). Skipping batch.");
+                _logger.LogWarning(ex, "Discord.NET deserialization error fetching messages. Skipping batch.");
                 return Enumerable.Empty<IMessage>();
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Catch other unexpected errors during message fetch
                 _logger.LogWarning(ex, "Unexpected error fetching messages. Skipping batch.");
                 return Enumerable.Empty<IMessage>();
             }

@@ -1,10 +1,12 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OpenAI;
 using OpenAI.Interfaces;
 using OpenAI.Managers;
 using OpenAI.ObjectModels;
 using OpenAI.ObjectModels.RequestModels;
 using System.Net;
+using TLDRkseid.Configuration;
 
 namespace TLDRkseid.Services;
 
@@ -13,16 +15,15 @@ public class AiSummarizerService
     private readonly IOpenAIService _service;
     private readonly CostTrackerService _costTracker;
     private readonly ILogger<AiSummarizerService> _logger;
+    private readonly OpenAISettings _settings;
     private DateTime _lastRequestUtc = DateTime.MinValue;
 
-    // Timeout for OpenAI API calls (Discord deferred responses allow up to 15 min, but we want reasonable UX)
-    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(30);
-
-    public AiSummarizerService(IOpenAIService openAiService, CostTrackerService costTracker, ILogger<AiSummarizerService> logger)
+    public AiSummarizerService(IOpenAIService openAiService, CostTrackerService costTracker, ILogger<AiSummarizerService> logger, IOptions<OpenAISettings> settings)
     {
         _service = openAiService;
         _costTracker = costTracker;
         _logger = logger;
+        _settings = settings.Value;
     }
 
     public async Task<(string Summary, double Cost)> SummarizeAsync(List<string> messages)
@@ -30,10 +31,11 @@ public class AiSummarizerService
         // Debounce protection
         var now = DateTime.UtcNow;
         var timeSinceLast = now - _lastRequestUtc;
-        if (timeSinceLast.TotalSeconds < 2)
+        var debounceMs = _settings.DebounceMilliseconds;
+        if (timeSinceLast.TotalMilliseconds < debounceMs)
         {
             _logger.LogDebug("Debouncing AI call ({ElapsedMs}ms since last call)", timeSinceLast.TotalMilliseconds);
-            await Task.Delay(2000 - (int)timeSinceLast.TotalMilliseconds);
+            await Task.Delay(debounceMs - (int)timeSinceLast.TotalMilliseconds);
         }
         _lastRequestUtc = DateTime.UtcNow;
 
@@ -41,7 +43,7 @@ public class AiSummarizerService
         var prompt = $@"
             You're a Discord assistant summarizing a channel conversation.
 
-            Your job is to extract **any meaningful insights**, **recurring themes**, or **noteworthy quotes**, 
+            Your job is to extract **any meaningful insights**, **recurring themes**, or **noteworthy quotes**,
             even if the conversation is light, social, or mostly jokes. Always provide a summary, even if the discussion is minimal.
 
             Format the summary as 3–5 short bullet points.
@@ -54,9 +56,9 @@ public class AiSummarizerService
 
         var request = new ChatCompletionCreateRequest
         {
-            Model = "gpt-3.5-turbo",
-            Temperature = 0.7f,
-            MaxTokens = 300,
+            Model = _settings.Model,
+            Temperature = _settings.Temperature,
+            MaxTokens = _settings.MaxTokens,
             Messages = new List<ChatMessage>
             {
                 ChatMessage.FromSystem("You are a helpful, concise summarizer that always provides a summary, even for casual conversation or light activity."),
@@ -64,21 +66,23 @@ public class AiSummarizerService
             }
         };
 
+        var apiTimeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
+
         // Execute with timeout
         try
         {
             var apiTask = _service.ChatCompletion.CreateCompletion(request);
-            var completedTask = await Task.WhenAny(apiTask, Task.Delay(ApiTimeout));
+            var completedTask = await Task.WhenAny(apiTask, Task.Delay(apiTimeout));
 
             if (completedTask != apiTask)
             {
-                throw new OperationCanceledException($"OpenAI API call timed out after {ApiTimeout.TotalSeconds}s");
+                throw new OperationCanceledException($"OpenAI API call timed out after {apiTimeout.TotalSeconds}s");
             }
 
             var result = await apiTask;
 
             var totalTokens = result.Usage?.TotalTokens ?? 0;
-            var cost = totalTokens * 0.002 / 1000.0;
+            var cost = totalTokens * _settings.CostPerThousandTokens / 1000.0;
 
             if (cost > 0)
             {
@@ -99,7 +103,7 @@ public class AiSummarizerService
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("OpenAI API call timed out after {Timeout}s", ApiTimeout.TotalSeconds);
+            _logger.LogWarning("OpenAI API call timed out after {Timeout}s", apiTimeout.TotalSeconds);
             return ("⏱️ The summary request timed out. The channel may have too many messages to process. Try a smaller depth.", 0);
         }
         catch (HttpRequestException ex)
